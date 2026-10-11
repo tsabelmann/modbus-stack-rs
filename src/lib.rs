@@ -28,7 +28,7 @@ pub use adu::AduData;
 
 /// PDU related types.
 mod pdu;
-pub use pdu::{PduData, PduDataMut};
+pub use pdu::PduData;
 
 /// TCP/IP related types and helper functions.
 pub mod tcp;
