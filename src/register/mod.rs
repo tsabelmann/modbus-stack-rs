@@ -54,6 +54,9 @@ pub use at::At;
 mod cursor;
 pub use cursor::{ReadCursor, WriteCursor};
 
+mod reserved;
+pub use reserved::Reserved;
+
 /// Trait for turning a reference into a immutable register iterator.
 pub trait IntoRegIter<'a> {
     type IntoIter: Iterator<Item = &'a u16>;
