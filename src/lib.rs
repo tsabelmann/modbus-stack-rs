@@ -11,7 +11,7 @@ pub mod constants;
 mod function;
 pub use function::{
     read_holding_registers, read_input_registers, write_single_register, write_multiple_registers,
-    DecodeError, Malformed, Registers,
+    encode_exception, DecodeError, EncodeError, Malformed, Registers,
 };
 
 pub mod encode;
@@ -33,7 +33,7 @@ pub use adu::AduData;
 
 /// PDU related types.
 mod pdu;
-pub use pdu::PduData;
+pub use pdu::{FrameEncoder, PduData};
 
 /// TCP/IP related types and helper functions.
 pub mod tcp;
