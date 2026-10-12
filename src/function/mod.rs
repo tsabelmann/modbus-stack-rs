@@ -176,7 +176,11 @@ impl<'a> ExactSizeIterator for Registers<'a> {}
 
 #[cfg(test)]
 pub(crate) mod test_util {
-    use crate::PduData;
+    use super::EncodeError;
+    use crate::constants::MODBUS_RTU_FRAME_DATA_LENGTH;
+    use crate::rtu::{ModbusRtuFrame, check_rtu_crc};
+    use crate::tcp::Frame;
+    use crate::{AduData, ExceptionCode, FrameEncoder, FunctionKind, PduData};
 
     /// PDU backed by a plain byte slice.
     pub(crate) struct Pdu<'a>(pub(crate) &'a [u8]);
@@ -185,6 +189,94 @@ pub(crate) mod test_util {
         fn pdu_data(&self) -> &[u8] {
             self.0
         }
+    }
+
+    /// Frame encoder with a payload capacity of exactly `N` bytes.
+    pub(crate) struct SmallFrame<const N: usize> {
+        pub(crate) payload: [u8; N],
+        pub(crate) finalized: Option<(FunctionKind, usize)>,
+    }
+
+    impl<const N: usize> SmallFrame<N> {
+        pub(crate) fn new() -> SmallFrame<N> {
+            SmallFrame {
+                payload: [0; N],
+                finalized: None,
+            }
+        }
+    }
+
+    impl<const N: usize> FrameEncoder for SmallFrame<N> {
+        fn payload_mut(&mut self) -> &mut [u8] {
+            &mut self.payload
+        }
+
+        fn finalize(&mut self, code: FunctionKind, payload_len: usize) {
+            assert!(payload_len <= N, "payload exceeds frame capacity");
+            self.finalized = Some((code, payload_len));
+        }
+    }
+
+    /// All exception codes, including unknown ones.
+    pub(crate) const EXCEPTION_CODES: [ExceptionCode; 12] = [
+        ExceptionCode::IllegalFunction,
+        ExceptionCode::IllegalDataAddress,
+        ExceptionCode::IllegalDataValue,
+        ExceptionCode::ServerDeviceFailure,
+        ExceptionCode::Acknowledge,
+        ExceptionCode::ServerDeviceBusy,
+        ExceptionCode::MemoryParityError,
+        ExceptionCode::GatewayPathUnavailable,
+        ExceptionCode::GatewayTargetFailedToRespond,
+        ExceptionCode::Unknown(0x00),
+        ExceptionCode::Unknown(0x42),
+        ExceptionCode::Unknown(0xFF),
+    ];
+
+    /// Addresses and values that expose byte order and sign errors.
+    pub(crate) const EDGE_VALUES: [u16; 7] =
+        [0x0000, 0x0001, 0x00FF, 0x7FFF, 0x8000, 0xFF00, 0xFFFF];
+
+    /// `N` distinct register values, starting with `0x0000`, `0x00FF`, `0xFF00` and `0xFFFF`.
+    pub(crate) fn distinct_values<const N: usize>() -> [u16; N] {
+        core::array::from_fn(|i| match i {
+            0 => 0x0000,
+            1 => 0x00FF,
+            2 => 0xFF00,
+            3 => 0xFFFF,
+            _ => (i as u16) * 0x0101 + 1,
+        })
+    }
+
+    /// Encodes into a TCP and an RTU frame, checks both frames and calls `check` with each of them.
+    pub(crate) fn roundtrip(
+        encode: impl Fn(&mut dyn FrameEncoder) -> Result<(), EncodeError>,
+        check: impl Fn(&dyn PduData),
+    ) {
+        // TCP
+        let mut tcp = Frame::new(0x1234, 0x11);
+        encode(&mut tcp).unwrap();
+        assert_eq!(tcp.length() as usize, 1 + tcp.pdu().len());
+        assert_eq!(tcp.transaction_id(), 0x1234);
+        assert_eq!(tcp.unit_id(), 0x11);
+        check(&tcp);
+
+        // RTU
+        let mut data = [0u8; MODBUS_RTU_FRAME_DATA_LENGTH];
+        let mut rtu = ModbusRtuFrame::new(&mut data, 0x11);
+        encode(&mut rtu).unwrap();
+        let adu = rtu.adu_data();
+        let crc_index = adu.len() - 2;
+        assert_eq!(adu[0], 0x11);
+        assert!(check_rtu_crc(
+            &adu[..crc_index],
+            adu[crc_index],
+            adu[crc_index + 1]
+        ));
+        check(&rtu);
+
+        // Same PDU for both transports
+        assert_eq!(rtu.pdu_data(), tcp.pdu());
     }
 }
 
@@ -265,5 +357,78 @@ mod function_tests {
             ExceptionCode::from(Malformed::ByteCount),
             ExceptionCode::IllegalDataValue
         );
+    }
+
+    #[test]
+    fn encode_exception_002() {
+        // Every exception code for an arbitrary function (TCP and RTU)
+        for code in test_util::EXCEPTION_CODES {
+            test_util::roundtrip(
+                |frame| encode_exception(frame, FunctionCode::ReadCoils, code),
+                |pdu| {
+                    assert_eq!(
+                        pdu.function_code(),
+                        FunctionKind::Exception(FunctionCode::ReadCoils)
+                    );
+                    assert_eq!(pdu.pdu_data(), &[0x81, u8::from(code)]);
+                },
+            );
+        }
+    }
+
+    #[test]
+    fn encode_exception_003() {
+        // Capacity of zero bytes
+        let mut frame = test_util::SmallFrame::<0>::new();
+        let result = encode_exception(
+            &mut frame,
+            FunctionCode::ReadCoils,
+            ExceptionCode::IllegalFunction,
+        );
+        assert_eq!(result, Err(EncodeError::BufferTooSmall));
+        assert_eq!(frame.finalized, None);
+
+        // Capacity of exactly one byte
+        let mut frame = test_util::SmallFrame::<1>::new();
+        let result = encode_exception(
+            &mut frame,
+            FunctionCode::ReadCoils,
+            ExceptionCode::IllegalFunction,
+        );
+        assert_eq!(result, Ok(()));
+        assert_eq!(
+            frame.finalized,
+            Some((FunctionKind::Exception(FunctionCode::ReadCoils), 1))
+        );
+        assert_eq!(frame.payload, [0x01]);
+    }
+
+    #[test]
+    fn encode_exception_004() {
+        // Unknown exception code with a known value: the bytes are stable,
+        // decoding returns the named variant
+        let response =
+            crate::read_holding_registers::Response::new_exception(ExceptionCode::Unknown(0x02));
+        test_util::roundtrip(
+            |frame| response.encode(frame),
+            |pdu| {
+                assert_eq!(pdu.pdu_data(), &[0x83, 0x02]);
+                assert_eq!(
+                    crate::read_holding_registers::Response::decode(pdu),
+                    Ok(crate::read_holding_registers::Response::new_exception(
+                        ExceptionCode::IllegalDataAddress
+                    ))
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn distinct_values_001() {
+        // Test helper produces distinct values
+        let values = test_util::distinct_values::<125>();
+        for (i, a) in values.iter().enumerate() {
+            assert!(!values[i + 1..].contains(a));
+        }
     }
 }

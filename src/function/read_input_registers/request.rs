@@ -85,7 +85,7 @@ mod request_tests {
     use super::*;
     use crate::AduData;
     use crate::constants::MODBUS_RTU_FRAME_DATA_LENGTH;
-    use crate::function::test_util::Pdu;
+    use crate::function::test_util::{self, Pdu, SmallFrame};
     use crate::rtu::{ModbusRtuFrame, check_rtu_crc};
     use crate::tcp::Frame;
 
@@ -200,5 +200,92 @@ mod request_tests {
             Request::new(0, 126).encode(&mut frame),
             Err(EncodeError::Malformed(Malformed::Quantity))
         );
+    }
+
+    #[test]
+    fn edge_001() {
+        // Quantity 1 and 125 with lowest and highest address (TCP and RTU)
+        for starting_address in [0x0000, 0xFFFF] {
+            for quantity in [1, 125] {
+                let request = Request::new(starting_address, quantity);
+                test_util::roundtrip(
+                    |frame| request.encode(frame),
+                    |pdu| assert_eq!(Request::decode(pdu), Ok(request)),
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn edge_002() {
+        // Address range beyond 0xFFFF is passed through (checked by the data model)
+        let request = Request::new(0xFFFF, 2);
+        test_util::roundtrip(
+            |frame| request.encode(frame),
+            |pdu| {
+                assert_eq!(pdu.pdu_data(), &[0x04, 0xFF, 0xFF, 0x00, 0x02]);
+                assert_eq!(Request::decode(pdu), Ok(request));
+            },
+        );
+    }
+
+    #[test]
+    fn edge_003() {
+        // Byte order of address and quantity
+        let mut frame = Frame::new(0x0001, 0x11);
+        Request::new(0x1234, 0x0056).encode(&mut frame).unwrap();
+        assert_eq!(frame.pdu(), &[0x04, 0x12, 0x34, 0x00, 0x56]);
+    }
+
+    #[test]
+    fn edge_004() {
+        // Capacity one byte too small and exactly fitting
+        let request = Request::new(0x006B, 3);
+
+        let mut frame = SmallFrame::<3>::new();
+        assert_eq!(request.encode(&mut frame), Err(EncodeError::BufferTooSmall));
+        assert_eq!(frame.finalized, None);
+
+        let mut frame = SmallFrame::<4>::new();
+        assert_eq!(request.encode(&mut frame), Ok(()));
+        assert_eq!(frame.finalized, Some((request.function_code(), 4)));
+        assert_eq!(frame.payload, [0x00, 0x6B, 0x00, 0x03]);
+    }
+
+    #[test]
+    fn edge_005() {
+        // Failed encoding leaves the frame unchanged (TCP and RTU)
+        let mut frame = Frame::new(0x0001, 0x11);
+        Request::new(0x006B, 3).encode(&mut frame).unwrap();
+        let before = frame.clone();
+        assert_eq!(
+            Request::new(0x006B, 0).encode(&mut frame),
+            Err(EncodeError::Malformed(Malformed::Quantity))
+        );
+        assert_eq!(
+            Request::new(0x006B, 126).encode(&mut frame),
+            Err(EncodeError::Malformed(Malformed::Quantity))
+        );
+        assert_eq!(frame, before);
+
+        let mut data = [0u8; MODBUS_RTU_FRAME_DATA_LENGTH];
+        let mut frame = ModbusRtuFrame::new(&mut data, 0x11);
+        Request::new(0x006B, 3).encode(&mut frame).unwrap();
+        let before = frame.adu_data().to_vec();
+        assert_eq!(
+            Request::new(0x006B, 0).encode(&mut frame),
+            Err(EncodeError::Malformed(Malformed::Quantity))
+        );
+        assert_eq!(frame.adu_data(), &before[..]);
+    }
+
+    #[test]
+    fn edge_006() {
+        // Decode and encode again yields the same bytes
+        let bytes = [0x04, 0xFF, 0x00, 0x00, 0x7D];
+        let request = Request::decode(&Pdu(&bytes)).unwrap();
+        let mut frame = Frame::new(0x0001, 0x11);
+        request.encode(&mut frame).unwrap();
+        assert_eq!(frame.pdu(), &bytes);
     }
 }

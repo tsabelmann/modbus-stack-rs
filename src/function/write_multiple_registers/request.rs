@@ -119,7 +119,7 @@ mod request_tests {
     use super::*;
     use crate::AduData;
     use crate::constants::MODBUS_RTU_FRAME_DATA_LENGTH;
-    use crate::function::test_util::Pdu;
+    use crate::function::test_util::{self, Pdu, SmallFrame, distinct_values};
     use crate::rtu::{ModbusRtuFrame, check_rtu_crc};
     use crate::tcp::Frame;
     use std::vec::Vec;
@@ -287,5 +287,158 @@ mod request_tests {
             Request::new(0, &values).encode(&mut frame),
             Err(EncodeError::Malformed(Malformed::Quantity))
         );
+    }
+
+    #[test]
+    fn edge_001() {
+        // 1 and 123 distinct values with lowest and highest address (TCP and RTU)
+        let values = distinct_values::<123>();
+        for starting_address in [0x0000, 0xFFFF] {
+            for quantity in [1, 4, 123] {
+                let request = Request::new(starting_address, &values[..quantity]);
+                test_util::roundtrip(
+                    |frame| request.encode(frame),
+                    |pdu| {
+                        let decoded = Request::decode(pdu).unwrap();
+                        assert_eq!(decoded, request);
+                        assert_eq!(decoded.starting_address(), starting_address);
+                        assert_eq!(decoded.quantity_of_registers() as usize, quantity);
+                        assert_eq!(decoded.byte_count() as usize, 2 * quantity);
+                        assert_eq!(decoded.registers().collect::<Vec<_>>(), &values[..quantity]);
+                    },
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn edge_002() {
+        // Byte order of address, quantity, byte count and values
+        let mut frame = Frame::new(0x0001, 0x11);
+        Request::new(0x1234, &[0x0000, 0x00FF, 0xFF00, 0xFFFF])
+            .encode(&mut frame)
+            .unwrap();
+        assert_eq!(
+            frame.pdu(),
+            &[
+                0x10, 0x12, 0x34, 0x00, 0x04, 0x08, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0xFF
+            ]
+        );
+    }
+
+    #[test]
+    fn edge_003() {
+        // Largest request: TCP frame of 259 bytes, RTU frame of 255 bytes
+        let values = distinct_values::<123>();
+        let request = Request::new(0x0001, &values);
+
+        let mut frame = Frame::new(0x0001, 0x11);
+        request.encode(&mut frame).unwrap();
+        assert_eq!(frame.as_bytes().len(), 259);
+        assert_eq!(frame.length(), 253);
+
+        let mut data = [0u8; MODBUS_RTU_FRAME_DATA_LENGTH];
+        let mut frame = ModbusRtuFrame::new(&mut data, 0x11);
+        request.encode(&mut frame).unwrap();
+        let adu = frame.adu_data();
+        assert_eq!(adu.len(), 255);
+        assert!(check_rtu_crc(&adu[..253], adu[253], adu[254]));
+        assert_eq!(Request::decode(&frame), Ok(request));
+    }
+
+    #[test]
+    fn edge_004() {
+        // More values than allowed, including more than fit into the byte count
+        let values = [0u16; 200];
+        let mut frame = Frame::new(0x0001, 0x11);
+        for quantity in [124, 128, 200] {
+            let result = Request::new(0x0001, &values[..quantity]).encode(&mut frame);
+            assert_eq!(result, Err(EncodeError::Malformed(Malformed::Quantity)));
+        }
+    }
+
+    #[test]
+    fn edge_005() {
+        // Capacity one byte too small and exactly fitting
+        let values = [0x1234, 0x5678];
+        let request = Request::new(0x0001, &values);
+
+        let mut frame = SmallFrame::<8>::new();
+        assert_eq!(request.encode(&mut frame), Err(EncodeError::BufferTooSmall));
+        assert_eq!(frame.finalized, None);
+
+        let mut frame = SmallFrame::<9>::new();
+        assert_eq!(request.encode(&mut frame), Ok(()));
+        assert_eq!(frame.finalized, Some((request.function_code(), 9)));
+        assert_eq!(
+            frame.payload,
+            [0x00, 0x01, 0x00, 0x02, 0x04, 0x12, 0x34, 0x56, 0x78]
+        );
+    }
+
+    #[test]
+    fn edge_006() {
+        // Failed encoding leaves the frame unchanged (TCP and RTU)
+        let values = [0u16; 124];
+
+        let mut frame = Frame::new(0x0001, 0x11);
+        Request::new(0x0001, &[0x1234]).encode(&mut frame).unwrap();
+        let before = frame.clone();
+        assert_eq!(
+            Request::new(0x0001, &[]).encode(&mut frame),
+            Err(EncodeError::Malformed(Malformed::Quantity))
+        );
+        assert_eq!(
+            Request::new(0x0001, &values).encode(&mut frame),
+            Err(EncodeError::Malformed(Malformed::Quantity))
+        );
+        assert_eq!(frame, before);
+
+        let mut data = [0u8; MODBUS_RTU_FRAME_DATA_LENGTH];
+        let mut frame = ModbusRtuFrame::new(&mut data, 0x11);
+        Request::new(0x0001, &[0x1234]).encode(&mut frame).unwrap();
+        let before = frame.adu_data().to_vec();
+        assert_eq!(
+            Request::new(0x0001, &values).encode(&mut frame),
+            Err(EncodeError::Malformed(Malformed::Quantity))
+        );
+        assert_eq!(frame.adu_data(), &before[..]);
+    }
+
+    #[test]
+    fn edge_007() {
+        // Shorter request after the largest request in the same frame (TCP and RTU)
+        let values = distinct_values::<123>();
+
+        let mut frame = Frame::new(0x0001, 0x11);
+        Request::new(0x0001, &values).encode(&mut frame).unwrap();
+        Request::new(0x0002, &[0xBEEF]).encode(&mut frame).unwrap();
+        assert_eq!(
+            frame.as_bytes(),
+            &[
+                0x00, 0x01, 0x00, 0x00, 0x00, 0x09, 0x11, 0x10, 0x00, 0x02, 0x00, 0x01, 0x02, 0xBE,
+                0xEF
+            ]
+        );
+
+        let mut data = [0u8; MODBUS_RTU_FRAME_DATA_LENGTH];
+        let mut frame = ModbusRtuFrame::new(&mut data, 0x11);
+        Request::new(0x0001, &values).encode(&mut frame).unwrap();
+        Request::new(0x0002, &[0xBEEF]).encode(&mut frame).unwrap();
+        let adu = frame.adu_data();
+        assert_eq!(adu.len(), 11);
+        assert!(check_rtu_crc(&adu[..9], adu[9], adu[10]));
+        assert_eq!(Request::decode(&frame), Ok(Request::new(0x0002, &[0xBEEF])));
+    }
+
+    #[test]
+    fn edge_008() {
+        // Decode and encode again yields the same bytes
+        let bytes = [0x10, 0xFF, 0xFF, 0x00, 0x02, 0x04, 0xFF, 0x00, 0x00, 0xFF];
+        let pdu = Pdu(&bytes);
+        let request = Request::decode(&pdu).unwrap();
+        let mut frame = Frame::new(0x0001, 0x11);
+        request.encode(&mut frame).unwrap();
+        assert_eq!(frame.pdu(), &bytes);
     }
 }

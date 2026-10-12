@@ -90,7 +90,7 @@ mod response_tests {
     use super::*;
     use crate::AduData;
     use crate::constants::MODBUS_RTU_FRAME_DATA_LENGTH;
-    use crate::function::test_util::Pdu;
+    use crate::function::test_util::{self, EDGE_VALUES, EXCEPTION_CODES, Pdu, SmallFrame};
     use crate::rtu::{ModbusRtuFrame, check_rtu_crc};
     use crate::tcp::Frame;
 
@@ -222,5 +222,89 @@ mod response_tests {
         assert_eq!(&adu[..3], &[0x11, 0x86, 0x02]);
         assert!(check_rtu_crc(&adu[..3], adu[3], adu[4]));
         assert_eq!(Response::decode(&frame), Ok(response));
+    }
+
+    #[test]
+    fn edge_001() {
+        // All combinations of edge addresses and values (TCP and RTU)
+        for address in EDGE_VALUES {
+            for value in EDGE_VALUES {
+                let message = Response::new(address, value);
+                test_util::roundtrip(
+                    |frame| message.encode(frame),
+                    |pdu| {
+                        let [a0, a1] = address.to_be_bytes();
+                        let [v0, v1] = value.to_be_bytes();
+                        assert_eq!(pdu.pdu_data(), &[0x06, a0, a1, v0, v1]);
+                        assert_eq!(Response::decode(pdu), Ok(message));
+                    },
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn edge_002() {
+        // Capacity one byte too small and exactly fitting
+        let message = Response::new(0x1234, 0xABCD);
+
+        let mut frame = SmallFrame::<3>::new();
+        assert_eq!(message.encode(&mut frame), Err(EncodeError::BufferTooSmall));
+        assert_eq!(frame.finalized, None);
+
+        let mut frame = SmallFrame::<4>::new();
+        assert_eq!(message.encode(&mut frame), Ok(()));
+        assert_eq!(frame.finalized, Some((message.function_code(), 4)));
+        assert_eq!(frame.payload, [0x12, 0x34, 0xAB, 0xCD]);
+    }
+
+    #[test]
+    fn edge_003() {
+        // Decode and encode again yields the same bytes
+        let bytes = [0x06, 0xFF, 0x00, 0x00, 0xFF];
+        let message = Response::decode(&Pdu(&bytes)).unwrap();
+        let mut frame = Frame::new(0x0001, 0x11);
+        message.encode(&mut frame).unwrap();
+        assert_eq!(frame.pdu(), &bytes);
+    }
+
+    #[test]
+    fn edge_004() {
+        // Every exception code (TCP and RTU)
+        for code in EXCEPTION_CODES {
+            let response = Response::new_exception(code);
+            test_util::roundtrip(
+                |frame| response.encode(frame),
+                |pdu| {
+                    assert_eq!(pdu.pdu_data(), &[0x86, u8::from(code)]);
+                    assert_eq!(Response::decode(pdu), Ok(response));
+                },
+            );
+        }
+    }
+
+    #[test]
+    fn edge_005() {
+        // Exception after a normal response in the same frame (TCP and RTU)
+        let mut frame = Frame::new(0x0001, 0x11);
+        Response::new(0x0001, 0x0003).encode(&mut frame).unwrap();
+        Response::new_exception(ExceptionCode::IllegalDataValue)
+            .encode(&mut frame)
+            .unwrap();
+        assert_eq!(
+            frame.as_bytes(),
+            &[0x00, 0x01, 0x00, 0x00, 0x00, 0x03, 0x11, 0x86, 0x03]
+        );
+
+        let mut data = [0u8; MODBUS_RTU_FRAME_DATA_LENGTH];
+        let mut frame = ModbusRtuFrame::new(&mut data, 0x11);
+        Response::new(0x0001, 0x0003).encode(&mut frame).unwrap();
+        Response::new_exception(ExceptionCode::IllegalDataValue)
+            .encode(&mut frame)
+            .unwrap();
+        let adu = frame.adu_data();
+        assert_eq!(&adu[..3], &[0x11, 0x86, 0x03]);
+        assert_eq!(adu.len(), 5);
+        assert!(check_rtu_crc(&adu[..3], adu[3], adu[4]));
     }
 }

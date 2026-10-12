@@ -70,7 +70,7 @@ mod request_tests {
     use super::*;
     use crate::AduData;
     use crate::constants::MODBUS_RTU_FRAME_DATA_LENGTH;
-    use crate::function::test_util::Pdu;
+    use crate::function::test_util::{self, EDGE_VALUES, Pdu, SmallFrame};
     use crate::rtu::{ModbusRtuFrame, check_rtu_crc};
     use crate::tcp::Frame;
 
@@ -169,5 +169,49 @@ mod request_tests {
         assert_eq!(&adu[..6], &[0x11, 0x06, 0x00, 0x01, 0x00, 0x03]);
         assert!(check_rtu_crc(&adu[..6], adu[6], adu[7]));
         assert_eq!(Request::decode(&frame), Ok(Request::new(0x0001, 0x0003)));
+    }
+
+    #[test]
+    fn edge_001() {
+        // All combinations of edge addresses and values (TCP and RTU)
+        for address in EDGE_VALUES {
+            for value in EDGE_VALUES {
+                let message = Request::new(address, value);
+                test_util::roundtrip(
+                    |frame| message.encode(frame),
+                    |pdu| {
+                        let [a0, a1] = address.to_be_bytes();
+                        let [v0, v1] = value.to_be_bytes();
+                        assert_eq!(pdu.pdu_data(), &[0x06, a0, a1, v0, v1]);
+                        assert_eq!(Request::decode(pdu), Ok(message));
+                    },
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn edge_002() {
+        // Capacity one byte too small and exactly fitting
+        let message = Request::new(0x1234, 0xABCD);
+
+        let mut frame = SmallFrame::<3>::new();
+        assert_eq!(message.encode(&mut frame), Err(EncodeError::BufferTooSmall));
+        assert_eq!(frame.finalized, None);
+
+        let mut frame = SmallFrame::<4>::new();
+        assert_eq!(message.encode(&mut frame), Ok(()));
+        assert_eq!(frame.finalized, Some((message.function_code(), 4)));
+        assert_eq!(frame.payload, [0x12, 0x34, 0xAB, 0xCD]);
+    }
+
+    #[test]
+    fn edge_003() {
+        // Decode and encode again yields the same bytes
+        let bytes = [0x06, 0xFF, 0x00, 0x00, 0xFF];
+        let message = Request::decode(&Pdu(&bytes)).unwrap();
+        let mut frame = Frame::new(0x0001, 0x11);
+        message.encode(&mut frame).unwrap();
+        assert_eq!(frame.pdu(), &bytes);
     }
 }
