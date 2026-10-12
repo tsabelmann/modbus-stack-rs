@@ -5,7 +5,7 @@ use crate::tcp::frame::Frame;
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ParseError {
     InvalidProtocolIdentifier,
-    InvalidLength
+    InvalidLength,
 }
 
 // ── FrameParser ──
@@ -19,7 +19,7 @@ pub enum ParseError {
 pub struct FrameParser {
     buf: [u8; Frame::MAX_SIZE],
     filled: u16,
-    error: Option<ParseError>
+    error: Option<ParseError>,
 }
 
 impl FrameParser {
@@ -33,7 +33,7 @@ impl FrameParser {
         FrameParser {
             buf: [0u8; Frame::MAX_SIZE],
             filled: 0,
-            error: None
+            error: None,
         }
     }
 
@@ -90,7 +90,11 @@ impl FrameParser {
 
     /// Returns an iterator over all frames completed by `input`.
     pub fn frames<'a>(&'a mut self, input: &'a [u8]) -> Frames<'a> {
-        Frames { parser: self, input, done: false }
+        Frames {
+            parser: self,
+            input,
+            done: false,
+        }
     }
 
     pub const fn reset(&mut self) {
@@ -136,7 +140,7 @@ impl Default for FrameParser {
 pub struct Frames<'a> {
     parser: &'a mut FrameParser,
     input: &'a [u8],
-    done: bool
+    done: bool,
 }
 
 impl<'a> Iterator for Frames<'a> {
@@ -155,7 +159,7 @@ impl<'a> Iterator for Frames<'a> {
             Ok(None) => {
                 self.done = true;
                 None
-            },
+            }
             Err(error) => {
                 self.done = true;
                 Some(Err(error))
@@ -171,18 +175,15 @@ mod parser_tests {
     use std::vec::Vec;
 
     const READ_HOLDING_REGISTERS: [u8; 12] = [
-        0x00, 0x01,                 // Transaction ID
-        0x00, 0x00,                 // Protocol ID
-        0x00, 0x06,                 // Length
-        0x11,                       // Unit ID
-        0x03,                       // Function code
-        0x01, 0x2B, 0x00, 0x03,     // Data
+        0x00, 0x01, // Transaction ID
+        0x00, 0x00, // Protocol ID
+        0x00, 0x06, // Length
+        0x11, // Unit ID
+        0x03, // Function code
+        0x01, 0x2B, 0x00, 0x03, // Data
     ];
 
-    const EXCEPTION: [u8; 9] = [
-        0x00, 0x02, 0x00, 0x00, 0x00, 0x03,
-        0x22, 0x83, 0x01,
-    ];
+    const EXCEPTION: [u8; 9] = [0x00, 0x02, 0x00, 0x00, 0x00, 0x03, 0x22, 0x83, 0x01];
 
     // Helper to feed bytes one by one and return the last result
     fn feed_bytes(parser: &mut FrameParser, bytes: &[u8]) -> Result<Option<Frame>, ParseError> {
@@ -203,13 +204,18 @@ mod parser_tests {
     #[test]
     fn decode_read_holding_registers_request() {
         let mut parser = FrameParser::new();
-        let frame = feed_bytes(&mut parser, &READ_HOLDING_REGISTERS).unwrap().unwrap();
+        let frame = feed_bytes(&mut parser, &READ_HOLDING_REGISTERS)
+            .unwrap()
+            .unwrap();
 
         assert_eq!(frame.transaction_id(), 0x0001);
         assert_eq!(frame.protocol_id(), 0x0000);
         assert_eq!(frame.length(), 0x0006);
         assert_eq!(frame.unit_id(), 0x11);
-        assert_eq!(frame.function_code(), FunctionKind::Normal(FunctionCode::ReadHoldingRegisters));
+        assert_eq!(
+            frame.function_code(),
+            FunctionKind::Normal(FunctionCode::ReadHoldingRegisters)
+        );
         assert_eq!(frame.as_bytes(), &READ_HOLDING_REGISTERS);
     }
 
@@ -219,7 +225,10 @@ mod parser_tests {
         let frame = feed_bytes(&mut parser, &EXCEPTION).unwrap().unwrap();
 
         assert_eq!(frame.length(), 0x0003);
-        assert_eq!(frame.function_code(), FunctionKind::Exception(FunctionCode::ReadHoldingRegisters));
+        assert_eq!(
+            frame.function_code(),
+            FunctionKind::Exception(FunctionCode::ReadHoldingRegisters)
+        );
     }
 
     #[test]
@@ -250,7 +259,9 @@ mod parser_tests {
     fn decode_two_frames_sequentially() {
         let mut parser = FrameParser::new();
 
-        let frame = feed_bytes(&mut parser, &READ_HOLDING_REGISTERS).unwrap().unwrap();
+        let frame = feed_bytes(&mut parser, &READ_HOLDING_REGISTERS)
+            .unwrap()
+            .unwrap();
         assert_eq!(frame.transaction_id(), 0x0001);
         assert_eq!(frame.unit_id(), 0x11);
 
@@ -263,7 +274,9 @@ mod parser_tests {
     fn frame_outlives_further_parsing() {
         let mut parser = FrameParser::new();
 
-        let first = feed_bytes(&mut parser, &READ_HOLDING_REGISTERS).unwrap().unwrap();
+        let first = feed_bytes(&mut parser, &READ_HOLDING_REGISTERS)
+            .unwrap()
+            .unwrap();
         let second = feed_bytes(&mut parser, &EXCEPTION).unwrap().unwrap();
 
         assert_eq!(first.as_bytes(), &READ_HOLDING_REGISTERS);
@@ -301,13 +314,19 @@ mod parser_tests {
 
         let frames: Vec<_> = parser.frames(&input).collect();
         assert_eq!(frames.len(), 2);
-        assert_eq!(frames[0].as_ref().unwrap().as_bytes(), &READ_HOLDING_REGISTERS);
+        assert_eq!(
+            frames[0].as_ref().unwrap().as_bytes(),
+            &READ_HOLDING_REGISTERS
+        );
         assert_eq!(frames[1].as_ref().unwrap().as_bytes(), &EXCEPTION);
 
         // partial third frame is completed by the next chunk
         let frames: Vec<_> = parser.frames(&READ_HOLDING_REGISTERS[4..]).collect();
         assert_eq!(frames.len(), 1);
-        assert_eq!(frames[0].as_ref().unwrap().as_bytes(), &READ_HOLDING_REGISTERS);
+        assert_eq!(
+            frames[0].as_ref().unwrap().as_bytes(),
+            &READ_HOLDING_REGISTERS
+        );
     }
 
     #[test]
@@ -350,13 +369,19 @@ mod parser_tests {
     #[test]
     fn partial_header_returns_pending() {
         let mut parser = FrameParser::new();
-        assert_eq!(feed_bytes(&mut parser, &READ_HOLDING_REGISTERS[..4]), Ok(None));
+        assert_eq!(
+            feed_bytes(&mut parser, &READ_HOLDING_REGISTERS[..4]),
+            Ok(None)
+        );
     }
 
     #[test]
     fn partial_payload_returns_pending() {
         let mut parser = FrameParser::new();
-        assert_eq!(feed_bytes(&mut parser, &READ_HOLDING_REGISTERS[..9]), Ok(None));
+        assert_eq!(
+            feed_bytes(&mut parser, &READ_HOLDING_REGISTERS[..9]),
+            Ok(None)
+        );
     }
 
     #[test]
@@ -390,14 +415,20 @@ mod parser_tests {
     fn invalid_protocol_id_returns_error() {
         let mut parser = FrameParser::new();
         let received = [0x00, 0x01, 0x00, 0x01, 0x00, 0x06, 0x11];
-        assert_eq!(feed_bytes(&mut parser, &received), Err(ParseError::InvalidProtocolIdentifier));
+        assert_eq!(
+            feed_bytes(&mut parser, &received),
+            Err(ParseError::InvalidProtocolIdentifier)
+        );
     }
 
     #[test]
     fn invalid_protocol_id_high_byte() {
         let mut parser = FrameParser::new();
         let received = [0x00, 0x01, 0x01, 0x00, 0x00, 0x06, 0x11];
-        assert_eq!(feed_bytes(&mut parser, &received), Err(ParseError::InvalidProtocolIdentifier));
+        assert_eq!(
+            feed_bytes(&mut parser, &received),
+            Err(ParseError::InvalidProtocolIdentifier)
+        );
     }
 
     // ── Error: invalid length ──
@@ -409,7 +440,8 @@ mod parser_tests {
             assert_eq!(
                 feed_bytes(&mut parser, &header(length)),
                 Err(ParseError::InvalidLength),
-                "length {}", length
+                "length {}",
+                length
             );
         }
     }
@@ -422,8 +454,14 @@ mod parser_tests {
         let bad = [0x00, 0x01, 0x00, 0x01, 0x00, 0x06, 0x11];
         feed_bytes(&mut parser, &bad).unwrap_err();
 
-        assert_eq!(parser.push(0x00), Err(ParseError::InvalidProtocolIdentifier));
-        assert_eq!(parser.push_slice(&EXCEPTION), (0, Err(ParseError::InvalidProtocolIdentifier)));
+        assert_eq!(
+            parser.push(0x00),
+            Err(ParseError::InvalidProtocolIdentifier)
+        );
+        assert_eq!(
+            parser.push_slice(&EXCEPTION),
+            (0, Err(ParseError::InvalidProtocolIdentifier))
+        );
         assert!(!parser.is_idle());
     }
 
