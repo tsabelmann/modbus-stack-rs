@@ -1,5 +1,5 @@
-use crate::function::{DecodeError, Malformed};
-use crate::{FunctionCode, FunctionKind, PduData};
+use crate::function::{DecodeError, EncodeError, Malformed};
+use crate::{FrameEncoder, FunctionCode, FunctionKind, PduData};
 
 // ── Request ──
 
@@ -16,6 +16,13 @@ impl Request {
     /// Number of bytes in the PDU (function code, starting address, quantity of registers).
     pub const PDU_LENGTH: usize = 5;
 
+    pub const fn new(starting_address: u16, quantity_of_registers: u16) -> Request {
+        Request {
+            starting_address,
+            quantity_of_registers,
+        }
+    }
+
     pub fn decode(pdu: &dyn PduData) -> Result<Request, DecodeError> {
         match pdu.function_code() {
             FunctionKind::Normal(FunctionCode::ReadInputRegisters) => {}
@@ -30,11 +37,34 @@ impl Request {
         let starting_address = u16::from_be_bytes([data[1], data[2]]);
         let quantity_of_registers = u16::from_be_bytes([data[3], data[4]]);
 
-        if !(Self::MIN_QUANTITY_OF_REGISTERS..=Self::MAX_QUANTITY_OF_REGISTERS).contains(&quantity_of_registers) {
+        if !(Self::MIN_QUANTITY_OF_REGISTERS..=Self::MAX_QUANTITY_OF_REGISTERS)
+            .contains(&quantity_of_registers)
+        {
             return Err(Malformed::Quantity.into());
         }
 
-        Ok(Request { starting_address, quantity_of_registers })
+        Ok(Request {
+            starting_address,
+            quantity_of_registers,
+        })
+    }
+
+    pub fn encode(&self, frame: &mut dyn FrameEncoder) -> Result<(), EncodeError> {
+        if !(Self::MIN_QUANTITY_OF_REGISTERS..=Self::MAX_QUANTITY_OF_REGISTERS)
+            .contains(&self.quantity_of_registers)
+        {
+            return Err(Malformed::Quantity.into());
+        }
+
+        let payload_len = Self::PDU_LENGTH - 1;
+        let Some(payload) = frame.payload_mut().get_mut(..payload_len) else {
+            return Err(EncodeError::BufferTooSmall);
+        };
+        payload[..2].copy_from_slice(&self.starting_address.to_be_bytes());
+        payload[2..].copy_from_slice(&self.quantity_of_registers.to_be_bytes());
+
+        frame.finalize(self.function_code(), payload_len);
+        Ok(())
     }
 
     pub fn function_code(&self) -> FunctionKind {
@@ -53,13 +83,20 @@ impl Request {
 #[cfg(test)]
 mod request_tests {
     use super::*;
+    use crate::AduData;
+    use crate::constants::MODBUS_RTU_FRAME_DATA_LENGTH;
     use crate::function::test_util::Pdu;
+    use crate::rtu::{ModbusRtuFrame, check_rtu_crc};
+    use crate::tcp::Frame;
 
     #[test]
     fn decode_001() {
         // Example from the specification
         let request = Request::decode(&Pdu(&[0x04, 0x00, 0x08, 0x00, 0x01])).unwrap();
-        assert_eq!(request.function_code(), FunctionKind::Normal(FunctionCode::ReadInputRegisters));
+        assert_eq!(
+            request.function_code(),
+            FunctionKind::Normal(FunctionCode::ReadInputRegisters)
+        );
         assert_eq!(request.starting_address(), 0x0008);
         assert_eq!(request.quantity_of_registers(), 1);
     }
@@ -103,13 +140,65 @@ mod request_tests {
     fn decode_007() {
         // Read holding registers request
         let result = Request::decode(&Pdu(&[0x03, 0x00, 0x08, 0x00, 0x01]));
-        assert_eq!(result, Err(DecodeError::UnexpectedFunction(FunctionKind::Normal(FunctionCode::ReadHoldingRegisters))));
+        assert_eq!(
+            result,
+            Err(DecodeError::UnexpectedFunction(FunctionKind::Normal(
+                FunctionCode::ReadHoldingRegisters
+            )))
+        );
     }
 
     #[test]
     fn decode_008() {
         // Exception
         let result = Request::decode(&Pdu(&[0x84, 0x02]));
-        assert_eq!(result, Err(DecodeError::UnexpectedFunction(FunctionKind::Exception(FunctionCode::ReadInputRegisters))));
+        assert_eq!(
+            result,
+            Err(DecodeError::UnexpectedFunction(FunctionKind::Exception(
+                FunctionCode::ReadInputRegisters
+            )))
+        );
+    }
+
+    #[test]
+    fn encode_001() {
+        // Example from the specification (TCP)
+        let mut frame = Frame::new(0x0001, 0x11);
+        Request::new(0x0008, 1).encode(&mut frame).unwrap();
+        assert_eq!(
+            frame.as_bytes(),
+            &[
+                0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0x11, 0x04, 0x00, 0x08, 0x00, 0x01
+            ]
+        );
+        assert_eq!(Request::decode(&frame), Ok(Request::new(0x0008, 1)));
+    }
+
+    #[test]
+    fn encode_002() {
+        // Example from the specification (RTU)
+        let mut data = [0u8; MODBUS_RTU_FRAME_DATA_LENGTH];
+        let mut frame = ModbusRtuFrame::new(&mut data, 0x11);
+        Request::new(0x0008, 1).encode(&mut frame).unwrap();
+
+        let adu = frame.adu_data();
+        assert_eq!(&adu[..6], &[0x11, 0x04, 0x00, 0x08, 0x00, 0x01]);
+        assert!(check_rtu_crc(&adu[..6], adu[6], adu[7]));
+        assert_eq!(Request::decode(&frame), Ok(Request::new(0x0008, 1)));
+    }
+
+    #[test]
+    fn encode_003() {
+        // Quantity 0, 125 and 126
+        let mut frame = Frame::new(0x0001, 0x11);
+        assert_eq!(
+            Request::new(0, 0).encode(&mut frame),
+            Err(EncodeError::Malformed(Malformed::Quantity))
+        );
+        assert_eq!(Request::new(0, 125).encode(&mut frame), Ok(()));
+        assert_eq!(
+            Request::new(0, 126).encode(&mut frame),
+            Err(EncodeError::Malformed(Malformed::Quantity))
+        );
     }
 }
