@@ -1,6 +1,3 @@
-mod read_holding_registers;
-pub use read_holding_registers::{ReadHoldingRegistersResponseDecoder, ReadHoldingRegistersResponseDecoderError, ReadHoldingRegistersResponseRegisterIter};
-
 mod read_input_registers;
 pub use read_input_registers::{ReadInputRegistersResponseDecoder, ReadInputRegistersResponseDecoderError, ReadInputRegistersResponseRegisterIter};
 
