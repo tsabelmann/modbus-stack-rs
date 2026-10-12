@@ -126,6 +126,21 @@ impl<'a> Registers<'a> {
         }
         count
     }
+
+    /// Splits after `n` register values; `n` is clamped to the number of values.
+    pub(crate) fn split_at(self, n: usize) -> (Registers<'a>, Registers<'a>) {
+        let (head, tail) = match self.source {
+            Source::Bytes(data) => {
+                let (head, tail) = data.split_at(n.saturating_mul(2).min(data.len()));
+                (Source::Bytes(head), Source::Bytes(tail))
+            }
+            Source::Values(values) => {
+                let (head, tail) = values.split_at(n.min(values.len()));
+                (Source::Values(head), Source::Values(tail))
+            }
+        };
+        (Registers { source: head }, Registers { source: tail })
+    }
 }
 
 impl<'a> From<&'a [u16]> for Registers<'a> {
@@ -283,6 +298,32 @@ pub(crate) mod test_util {
 #[cfg(test)]
 mod function_tests {
     use super::*;
+
+    #[test]
+    fn registers_split_at_001() {
+        let (head, tail) = Registers::new(&[0x00, 0x01, 0x00, 0x02, 0x00, 0x03]).split_at(1);
+        assert_eq!(head.collect::<std::vec::Vec<_>>(), [1]);
+        assert_eq!(tail.collect::<std::vec::Vec<_>>(), [2, 3]);
+
+        let (head, tail) = Registers::from(&[1, 2, 3][..]).split_at(2);
+        assert_eq!(head.collect::<std::vec::Vec<_>>(), [1, 2]);
+        assert_eq!(tail.collect::<std::vec::Vec<_>>(), [3]);
+    }
+
+    #[test]
+    fn registers_split_at_002() {
+        let (head, tail) = Registers::new(&[0x00, 0x01]).split_at(5);
+        assert_eq!(head.len(), 1);
+        assert_eq!(tail.len(), 0);
+
+        let (head, tail) = Registers::from(&[1, 2][..]).split_at(usize::MAX);
+        assert_eq!(head.len(), 2);
+        assert_eq!(tail.len(), 0);
+
+        let (head, tail) = Registers::from(&[1, 2][..]).split_at(0);
+        assert_eq!(head.len(), 0);
+        assert_eq!(tail.len(), 2);
+    }
 
     #[test]
     fn registers_001() {
