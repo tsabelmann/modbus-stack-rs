@@ -6,8 +6,7 @@
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 
-use modbus_stack::{read_holding_registers, write_single_register, DecodeError};
-use modbus_stack::encode::FrameEncoder;
+use modbus_stack::{encode_exception, read_holding_registers, write_single_register, DecodeError};
 use modbus_stack::encode::response;
 use modbus_stack::tcp::{Frame, FrameParser};
 use modbus_stack::{ExceptionCode, FunctionCode, FunctionKind};
@@ -78,12 +77,12 @@ fn handle(frame: &mut Frame, registers: &mut [u16; REGISTER_COUNT]) {
                     let start = request.starting_address() as usize;
                     let end = start + request.quantity_of_registers() as usize;
                     match registers.get(start..end) {
-                        Some(values) => response::read_holding_registers::Response::new(values),
-                        None => response::read_holding_registers::Response::new_exception(ExceptionCode::IllegalDataAddress),
+                        Some(values) => read_holding_registers::Response::new(values),
+                        None => read_holding_registers::Response::new_exception(ExceptionCode::IllegalDataAddress),
                     }
                 }
-                Err(DecodeError::Malformed(err)) => response::read_holding_registers::Response::new_exception(err.into()),
-                Err(_) => response::read_holding_registers::Response::new_exception(ExceptionCode::IllegalFunction),
+                Err(DecodeError::Malformed(err)) => read_holding_registers::Response::new_exception(err.into()),
+                Err(_) => read_holding_registers::Response::new_exception(ExceptionCode::IllegalFunction),
             };
             response.encode(frame).expect("response fits into frame");
         }
@@ -102,8 +101,7 @@ fn handle(frame: &mut Frame, registers: &mut [u16; REGISTER_COUNT]) {
             response.encode(frame).expect("response fits into frame");
         }
         FunctionKind::Normal(code) | FunctionKind::Exception(code) => {
-            frame.payload_mut()[0] = u8::from(ExceptionCode::IllegalFunction);
-            frame.finalize(FunctionKind::Exception(code), 1);
+            encode_exception(frame, code, ExceptionCode::IllegalFunction).expect("exception fits into frame");
         }
     }
 }
