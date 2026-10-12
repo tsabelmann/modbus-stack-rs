@@ -1,5 +1,0 @@
-mod read_input_registers;
-pub use read_input_registers::{ReadInputRegistersRequestEncoder, ReadInputRegistersRequestEncodeError, ReadInputRegistersRequestEncodeExceptionError};
-
-mod write_single_register;
-pub use write_single_register::{WriteSingleRegisterRequestEncoder, WriteSingleRegisterRequestEncodeError, WriteSingleRegisterRequestEncodeExceptionError};
