@@ -93,7 +93,7 @@ mod frame_tests {
     use super::*;
     use crate::rtu::check_rtu_crc;
     use crate::{ExceptionCode, FunctionCode};
-    use crate::encode::response::write_single_register::Response;
+    use crate::write_single_register::Response;
 
     #[test]
     fn new_frame_001() {
