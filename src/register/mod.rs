@@ -44,6 +44,11 @@ pub use reg_f64::RegF64;
 mod reg_u16_array;
 pub use reg_u16_array::RegU16Array;
 
+// Placement
+
+mod at;
+pub use at::At;
+
 /// Trait for turning a reference into a immutable register iterator.
 pub trait IntoRegIter<'a> {
     type IntoIter: Iterator<Item = &'a u16>;
