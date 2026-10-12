@@ -1,5 +1,7 @@
 // pub mod atomic;
 
+use crate::ExceptionCode;
+
 mod reg_bool;
 pub use reg_bool::RegBool;
 
@@ -55,15 +57,25 @@ pub trait IntoRegIterMut<'a> {
 }
 
 /// Mögliche Fehler bei Register-Operationen
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RegisterError {
-    /// Offset out of bounds
+    /// The range `[offset, offset + len)` is not (completely) inside the register.
     OutOfBounds { offset: usize },
+    /// Only a part of a multi-register value was addressed.
+    PartialAccess,
     /// Register is not readable/writable
     AccessDenied,
-    /// Read/Write would exceed the maximum allowed offset.
-    /// Should **not** be implemented for basic registers.
-    Overflow,
+}
+
+impl From<RegisterError> for ExceptionCode {
+    fn from(value: RegisterError) -> Self {
+        match value {
+            RegisterError::OutOfBounds { .. }
+            | RegisterError::PartialAccess
+            | RegisterError::AccessDenied => ExceptionCode::IllegalDataAddress,
+        }
+    }
 }
 
 pub type RegisterResult<T> = Result<T, RegisterError>;
@@ -75,7 +87,9 @@ pub trait RegisterData {
 }
 
 pub trait ReadRegisterData {
-    fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<usize>;
+    /// Reads exactly `buf.len()` registers starting at `offset`.
+    /// Fails if any of them can not be read; `buf` may then be partially written.
+    fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<()>;
 }
 
 pub trait WriteRegisterData {
@@ -88,20 +102,30 @@ impl RegisterData for &[u16] {
     }
 }
 
+/// Copies `buf.len()` registers starting at `offset` from `data` into `buf`.
+pub(crate) fn read_words(data: &[u16], offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
+    let src = offset
+        .checked_add(buf.len())
+        .and_then(|end| data.get(offset..end))
+        .ok_or(RegisterError::OutOfBounds { offset })?;
+    buf.copy_from_slice(src);
+    Ok(())
+}
+
+/// Like [read_words], but only the whole `data` can be read at once.
+pub(crate) fn read_whole(data: &[u16], offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
+    if offset >= data.len() || buf.len() > data.len() - offset {
+        return Err(RegisterError::OutOfBounds { offset });
+    }
+    if offset != 0 || buf.len() != data.len() {
+        return Err(RegisterError::PartialAccess);
+    }
+    read_words(data, offset, buf)
+}
+
 impl ReadRegisterData for &[u16] {
-    fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<usize> {
-        if offset >= self.register_span() {
-            return Err(RegisterError::OutOfBounds { offset });
-        }
-
-        if buf.is_empty() {
-            return Ok(0);
-        }
-
-        let available = self.register_span() - offset;
-        let to_read = buf.len().min(available);
-        buf[..to_read].copy_from_slice(&self[offset..offset + to_read]);
-        Ok(to_read)
+    fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
+        read_words(self, offset, buf)
     }
 }
 
@@ -112,9 +136,8 @@ impl RegisterData for &mut [u16] {
 }
 
 impl ReadRegisterData for &mut [u16] {
-    fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<usize> {
-        let slice: &[u16] = self;
-        ReadRegisterData::read(&slice, offset, buf)
+    fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
+        read_words(self, offset, buf)
     }
 }
 
@@ -207,7 +230,7 @@ impl<T: RegisterData> RegisterData for RO<T> {
 }
 
 impl<T: ReadRegisterData> ReadRegisterData for RO<T> {
-    fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<usize> {
+    fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
         self.data.read(offset, buf)
     }
 }
@@ -307,7 +330,7 @@ impl<T: RegisterData> RegisterData for RW<T> {
 }
 
 impl<T: ReadRegisterData> ReadRegisterData for RW<T> {
-    fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<usize> {
+    fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
         self.data.read(offset, buf)
     }
 }
@@ -447,5 +470,63 @@ mod register_tests {
     fn get_rw_register_001() {
         let reg = RW::new(RegF32::new(1.5));
         assert_eq!(f32::from(reg.get()), 1.5);
+    }
+
+    #[test]
+    fn read_slice_001() {
+        let data: &[u16] = &[1, 2, 3, 4];
+
+        let mut buf = [0u16; 4];
+        assert_eq!(data.read(0, &mut buf), Ok(()));
+        assert_eq!(buf, [1, 2, 3, 4]);
+
+        let mut buf = [0u16; 2];
+        assert_eq!(data.read(1, &mut buf), Ok(()));
+        assert_eq!(buf, [2, 3]);
+
+        let mut buf = [0u16; 2];
+        assert_eq!(data.read(3, &mut buf), Err(RegisterError::OutOfBounds { offset: 3 }));
+        assert_eq!(data.read(usize::MAX, &mut buf), Err(RegisterError::OutOfBounds { offset: usize::MAX }));
+
+        let mut buf = [0u16; 0];
+        assert_eq!(data.read(2, &mut buf), Ok(()));
+    }
+
+    #[test]
+    fn read_whole_register_001() {
+        let reg = RegU32::new(0x11223344);
+
+        let mut buf = [0u16; 2];
+        assert_eq!(reg.read(0, &mut buf), Ok(()));
+        assert_eq!(buf, [0x1122, 0x3344]);
+
+        let mut buf = [0u16; 1];
+        assert_eq!(reg.read(0, &mut buf), Err(RegisterError::PartialAccess));
+        assert_eq!(reg.read(1, &mut buf), Err(RegisterError::PartialAccess));
+        assert_eq!(reg.read(2, &mut buf), Err(RegisterError::OutOfBounds { offset: 2 }));
+
+        let mut buf = [0u16; 3];
+        assert_eq!(reg.read(0, &mut buf), Err(RegisterError::OutOfBounds { offset: 0 }));
+    }
+
+    #[test]
+    fn read_ro_register_001() {
+        let reg = RO::new(RegU16::new(0xABCD));
+        let mut buf = [0u16; 1];
+        assert_eq!(reg.read(0, &mut buf), Ok(()));
+        assert_eq!(buf, [0xABCD]);
+        assert_eq!(reg.read(1, &mut buf), Err(RegisterError::OutOfBounds { offset: 1 }));
+    }
+
+    #[test]
+    fn register_error_into_exception_code_001() {
+        let errors = [
+            RegisterError::OutOfBounds { offset: 0 },
+            RegisterError::PartialAccess,
+            RegisterError::AccessDenied,
+        ];
+        for error in errors {
+            assert_eq!(ExceptionCode::from(error), ExceptionCode::IllegalDataAddress);
+        }
     }
 }

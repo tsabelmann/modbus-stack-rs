@@ -1,4 +1,4 @@
-use super::{ReadRegisterData, RegisterData, RegisterError, RegisterResult, WriteRegisterData};
+use super::{ReadRegisterData, RegisterData, RegisterError, RegisterResult, WriteRegisterData, read_words};
 use crate::register::{IntoRegIter, IntoRegIterMut};
 
 /// Modbus register that can be converter to and from [bool].
@@ -100,17 +100,8 @@ impl RegisterData for RegBool {
 /* ReadRegisterData */
 
 impl ReadRegisterData for RegBool {
-    fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<usize> {
-        match offset {
-            0 => match buf.len() {
-                0 => Ok(0),
-                _ => {
-                    buf[0] = self.data[0];
-                    Ok(1)
-                }
-            },
-            _ => RegisterResult::Err(RegisterError::OutOfBounds { offset }),
-        }
+    fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
+        read_words(&self.data, offset, buf)
     }
 }
 
