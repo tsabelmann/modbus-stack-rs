@@ -1,5 +1,4 @@
-use crate::encode::FrameEncoder;
-use crate::{AduData, FunctionKind, PduData};
+use crate::{AduData, FrameEncoder, FunctionKind, PduData};
 
 // ── Frame ──
 
@@ -122,11 +121,9 @@ impl FrameEncoder for Frame {
         &mut self.data[Frame::HEADER_SIZE + 1..]
     }
 
-    fn payload_capacity(&self) -> usize {
-        Self::MAX_SIZE - Self::HEADER_SIZE - 1
-    }
-
     fn finalize(&mut self, code: FunctionKind, payload_len: usize) {
+        assert!(payload_len < Self::MAX_SIZE - Self::HEADER_SIZE, "payload exceeds frame capacity");
+
         // function code
         self.data[Self::HEADER_SIZE] = u8::from(code);
 
