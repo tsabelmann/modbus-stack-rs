@@ -1,5 +1,5 @@
-use crate::function::{DecodeError, Malformed, Registers};
-use crate::{ExceptionCode, FunctionCode, FunctionKind, PduData};
+use crate::function::{encode_exception, DecodeError, EncodeError, Malformed, Registers};
+use crate::{ExceptionCode, FrameEncoder, FunctionCode, FunctionKind, PduData};
 
 // ── Response ──
 
@@ -12,6 +12,17 @@ pub enum Response<'a> {
 impl<'a> Response<'a> {
     pub const MIN_BYTE_COUNT: u8 = 2;
     pub const MAX_BYTE_COUNT: u8 = 250;
+
+    pub const MIN_QUANTITY_OF_REGISTERS: usize = 1;
+    pub const MAX_QUANTITY_OF_REGISTERS: usize = 125;
+
+    pub fn new(values: &'a [u16]) -> Response<'a> {
+        Response::Normal(Registers::from(values))
+    }
+
+    pub const fn new_exception(code: ExceptionCode) -> Response<'a> {
+        Response::Exception(code)
+    }
 
     pub fn decode(pdu: &'a dyn PduData) -> Result<Response<'a>, DecodeError> {
         let data = pdu.pdu_data();
@@ -43,6 +54,34 @@ impl<'a> Response<'a> {
         }
     }
 
+    pub fn encode(&self, frame: &mut dyn FrameEncoder) -> Result<(), EncodeError> {
+        match self {
+            Response::Normal(registers) => {
+                let quantity = registers.len();
+                if !(Self::MIN_QUANTITY_OF_REGISTERS..=Self::MAX_QUANTITY_OF_REGISTERS).contains(&quantity) {
+                    return Err(Malformed::Quantity.into());
+                }
+
+                let byte_count = 2 * quantity;
+                let Some(payload) = frame.payload_mut().get_mut(..1 + byte_count) else {
+                    return Err(EncodeError::BufferTooSmall);
+                };
+
+                // Byte count
+                payload[0] = byte_count as u8;
+
+                // Register values
+                for (bytes, value) in payload[1..].as_chunks_mut::<2>().0.iter_mut().zip(registers.clone()) {
+                    bytes.copy_from_slice(&value.to_be_bytes());
+                }
+
+                frame.finalize(self.function_code(), 1 + byte_count);
+                Ok(())
+            }
+            Response::Exception(code) => encode_exception(frame, FunctionCode::ReadHoldingRegisters, *code),
+        }
+    }
+
     pub fn function_code(&self) -> FunctionKind {
         match self {
             Response::Normal(_) => FunctionKind::Normal(FunctionCode::ReadHoldingRegisters),
@@ -54,7 +93,11 @@ impl<'a> Response<'a> {
 #[cfg(test)]
 mod response_tests {
     use super::*;
+    use crate::constants::MODBUS_RTU_FRAME_DATA_LENGTH;
     use crate::function::test_util::Pdu;
+    use crate::rtu::{check_rtu_crc, ModbusRtuFrame};
+    use crate::tcp::Frame;
+    use crate::AduData;
     use std::vec::Vec;
 
     #[test]
@@ -132,5 +175,74 @@ mod response_tests {
         // Exception of a different function
         let result = Response::decode(&Pdu(&[0x86, 0x02]));
         assert_eq!(result, Err(DecodeError::UnexpectedFunction(FunctionKind::Exception(FunctionCode::WriteSingleRegister))));
+    }
+
+    #[test]
+    fn encode_001() {
+        // Example from the specification (TCP)
+        let values = [0x022B, 0x0000, 0x0064];
+        let mut frame = Frame::new(0x0001, 0x11);
+        Response::new(&values).encode(&mut frame).unwrap();
+        assert_eq!(
+            frame.as_bytes(),
+            &[0x00, 0x01, 0x00, 0x00, 0x00, 0x09, 0x11, 0x03, 0x06, 0x02, 0x2B, 0x00, 0x00, 0x00, 0x64]
+        );
+        assert_eq!(Response::decode(&frame), Ok(Response::new(&values)));
+    }
+
+    #[test]
+    fn encode_002() {
+        // Example from the specification (RTU)
+        let values = [0x022B, 0x0000, 0x0064];
+        let mut data = [0u8; MODBUS_RTU_FRAME_DATA_LENGTH];
+        let mut frame = ModbusRtuFrame::new(&mut data, 0x11);
+        Response::new(&values).encode(&mut frame).unwrap();
+
+        let adu = frame.adu_data();
+        assert_eq!(&adu[..9], &[0x11, 0x03, 0x06, 0x02, 0x2B, 0x00, 0x00, 0x00, 0x64]);
+        assert!(check_rtu_crc(&adu[..9], adu[9], adu[10]));
+        assert_eq!(Response::decode(&frame), Ok(Response::new(&values)));
+    }
+
+    #[test]
+    fn encode_003() {
+        // Exception (TCP and RTU)
+        let response = Response::new_exception(ExceptionCode::IllegalDataAddress);
+
+        let mut frame = Frame::new(0x0001, 0x11);
+        response.encode(&mut frame).unwrap();
+        assert_eq!(frame.as_bytes(), &[0x00, 0x01, 0x00, 0x00, 0x00, 0x03, 0x11, 0x83, 0x02]);
+        assert_eq!(Response::decode(&frame), Ok(response.clone()));
+
+        let mut data = [0u8; MODBUS_RTU_FRAME_DATA_LENGTH];
+        let mut frame = ModbusRtuFrame::new(&mut data, 0x11);
+        response.encode(&mut frame).unwrap();
+        let adu = frame.adu_data();
+        assert_eq!(&adu[..3], &[0x11, 0x83, 0x02]);
+        assert!(check_rtu_crc(&adu[..3], adu[3], adu[4]));
+        assert_eq!(Response::decode(&frame), Ok(response));
+    }
+
+    #[test]
+    fn encode_004() {
+        // Quantity 0, 125 and 126
+        let values = [0u16; 126];
+        let mut frame = Frame::new(0x0001, 0x11);
+        assert_eq!(Response::new(&[]).encode(&mut frame), Err(EncodeError::Malformed(Malformed::Quantity)));
+        assert_eq!(Response::new(&values[..125]).encode(&mut frame), Ok(()));
+        assert_eq!(frame.pdu().len(), 2 + 250);
+        assert_eq!(Response::new(&values).encode(&mut frame), Err(EncodeError::Malformed(Malformed::Quantity)));
+    }
+
+    #[test]
+    fn encode_005() {
+        // Response in place keeps the header
+        let request = [0x00, 0x2A, 0x00, 0x00, 0x00, 0x06, 0x22, 0x03, 0x00, 0x00, 0x00, 0x01];
+        let mut frame = Frame::new(0x002A, 0x22);
+        crate::read_holding_registers::Request::new(0x0000, 1).encode(&mut frame).unwrap();
+        assert_eq!(frame.as_bytes(), &request);
+
+        Response::new(&[0xBEEF]).encode(&mut frame).unwrap();
+        assert_eq!(frame.as_bytes(), &[0x00, 0x2A, 0x00, 0x00, 0x00, 0x05, 0x22, 0x03, 0x02, 0xBE, 0xEF]);
     }
 }
