@@ -1,6 +1,7 @@
 use super::{IntoRegIter, IntoRegIterMut};
 use core::{ops::{Index, IndexMut}};
-use super::{RegisterData, ReadRegisterData, WriteRegisterData, RegisterResult, RegisterError, read_words};
+use super::{RegisterData, ReadRegisterData, WriteRegisterData, RegisterResult, read_words, write_words};
+use crate::Registers;
 
 /// Modbus register that can be converter to and from [u16; N].
 #[derive(Debug, PartialEq, Clone)]
@@ -176,16 +177,8 @@ impl<const N: usize> ReadRegisterData for RegU16Array<N> {
 /* WriteRegisterData */
 
 impl<const N: usize> WriteRegisterData for RegU16Array<N> {
-    fn write(&mut self, offset: usize, buf: &[u16]) -> RegisterResult<usize> {
-        if offset >= self.register_span() {
-            return Err(RegisterError::OutOfBounds { offset });
-        }
-
-        let available = self.register_span() - offset;
-        let to_write = buf.len().min(available);
-
-        self.data[offset..offset + to_write].copy_from_slice(&buf[..to_write]);
-        Ok(to_write)
+    fn write(&mut self, offset: usize, values: Registers<'_>) -> RegisterResult<()> {
+        write_words(&mut self.data, offset, values)
     }
 }
 

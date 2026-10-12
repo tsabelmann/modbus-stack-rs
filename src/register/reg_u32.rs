@@ -1,5 +1,6 @@
 use super::{IntoRegIter, IntoRegIterMut};
-use super::{RegisterData, ReadRegisterData, WriteRegisterData, RegisterResult, RegisterError, read_whole};
+use super::{RegisterData, ReadRegisterData, WriteRegisterData, RegisterResult, read_whole, write_whole};
+use crate::Registers;
 
 /// Modbus register that can be converter to and from [u32].
 #[derive(Debug, PartialEq, Default, Clone)]
@@ -105,16 +106,8 @@ impl ReadRegisterData for RegU32 {
 /* WriteRegisterData */
 
 impl WriteRegisterData for RegU32 {
-    fn write(&mut self, offset: usize, buf: &[u16]) -> RegisterResult<usize> {
-        if offset >= self.register_span() {
-            return Err(RegisterError::OutOfBounds { offset });
-        }
-
-        let available = self.register_span() - offset;
-        let to_write = buf.len().min(available);
-
-        self.data[offset..offset + to_write].copy_from_slice(&buf[..to_write]);
-        Ok(to_write)
+    fn write(&mut self, offset: usize, values: Registers<'_>) -> RegisterResult<()> {
+        write_whole(&mut self.data, offset, values)
     }
 }
 

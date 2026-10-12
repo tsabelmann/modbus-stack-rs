@@ -1,6 +1,6 @@
 // pub mod atomic;
 
-use crate::ExceptionCode;
+use crate::{ExceptionCode, Registers};
 
 mod reg_bool;
 pub use reg_bool::RegBool;
@@ -66,6 +66,8 @@ pub enum RegisterError {
     PartialAccess,
     /// Register is not readable/writable
     AccessDenied,
+    /// The value is not valid for the register.
+    InvalidValue,
 }
 
 impl From<RegisterError> for ExceptionCode {
@@ -74,6 +76,7 @@ impl From<RegisterError> for ExceptionCode {
             RegisterError::OutOfBounds { .. }
             | RegisterError::PartialAccess
             | RegisterError::AccessDenied => ExceptionCode::IllegalDataAddress,
+            RegisterError::InvalidValue => ExceptionCode::IllegalDataValue,
         }
     }
 }
@@ -93,7 +96,9 @@ pub trait ReadRegisterData {
 }
 
 pub trait WriteRegisterData {
-    fn write(&mut self, offset: usize, buf: &[u16]) -> RegisterResult<usize>;
+    /// Writes all `values` starting at `offset`.
+    /// On `Err` the register is left unchanged.
+    fn write(&mut self, offset: usize, values: Registers<'_>) -> RegisterResult<()>;
 }
 
 impl RegisterData for &[u16] {
@@ -123,6 +128,42 @@ pub(crate) fn read_whole(data: &[u16], offset: usize, buf: &mut [u16]) -> Regist
     read_words(data, offset, buf)
 }
 
+/// Copies all `values` into `data` starting at `offset`.
+pub(crate) fn write_words(data: &mut [u16], offset: usize, values: Registers<'_>) -> RegisterResult<()> {
+    write_words_with(data, offset, values, |_| true)
+}
+
+/// Like [write_words], but fails with [RegisterError::InvalidValue] if any value is not valid.
+pub(crate) fn write_words_with(
+    data: &mut [u16],
+    offset: usize,
+    values: Registers<'_>,
+    is_valid: fn(u16) -> bool,
+) -> RegisterResult<()> {
+    let dst = offset
+        .checked_add(values.len())
+        .and_then(|end| data.get_mut(offset..end))
+        .ok_or(RegisterError::OutOfBounds { offset })?;
+    if !values.clone().all(is_valid) {
+        return Err(RegisterError::InvalidValue);
+    }
+    for (dst, value) in dst.iter_mut().zip(values) {
+        *dst = value;
+    }
+    Ok(())
+}
+
+/// Like [write_words], but only the whole `data` can be written at once.
+pub(crate) fn write_whole(data: &mut [u16], offset: usize, values: Registers<'_>) -> RegisterResult<()> {
+    if offset >= data.len() || values.len() > data.len() - offset {
+        return Err(RegisterError::OutOfBounds { offset });
+    }
+    if offset != 0 || values.len() != data.len() {
+        return Err(RegisterError::PartialAccess);
+    }
+    write_words(data, offset, values)
+}
+
 impl ReadRegisterData for &[u16] {
     fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
         read_words(self, offset, buf)
@@ -142,18 +183,8 @@ impl ReadRegisterData for &mut [u16] {
 }
 
 impl WriteRegisterData for &mut [u16] {
-    fn write(&mut self, offset: usize, buf: &[u16]) -> RegisterResult<usize> {
-        if offset >= self.register_span() {
-            return Err(RegisterError::OutOfBounds { offset });
-        }
-
-        let available = self.register_span() - offset;
-        if buf.len() > available {
-            return Err(RegisterError::OutOfBounds { offset });
-        }
-
-        self[offset..offset + buf.len()].copy_from_slice(buf);
-        Ok(buf.len())
+    fn write(&mut self, offset: usize, values: Registers<'_>) -> RegisterResult<()> {
+        write_words(self, offset, values)
     }
 }
 
@@ -336,8 +367,8 @@ impl<T: ReadRegisterData> ReadRegisterData for RW<T> {
 }
 
 impl<T: WriteRegisterData> WriteRegisterData for RW<T> {
-    fn write(&mut self, offset: usize, buf: &[u16]) -> RegisterResult<usize> {
-        self.data.write(offset, buf)
+    fn write(&mut self, offset: usize, values: Registers<'_>) -> RegisterResult<()> {
+        self.data.write(offset, values)
     }
 }
 
@@ -528,5 +559,65 @@ mod register_tests {
         for error in errors {
             assert_eq!(ExceptionCode::from(error), ExceptionCode::IllegalDataAddress);
         }
+    }
+
+    #[test]
+    fn invalid_value_into_exception_code_001() {
+        assert_eq!(ExceptionCode::from(RegisterError::InvalidValue), ExceptionCode::IllegalDataValue);
+    }
+
+    #[test]
+    fn write_slice_001() {
+        let mut data = [1u16, 2, 3, 4];
+        let mut slice: &mut [u16] = &mut data;
+
+        assert_eq!(slice.write(1, Registers::from(&[20, 30][..])), Ok(()));
+        assert_eq!(slice, [1, 20, 30, 4]);
+
+        assert_eq!(slice.write(3, Registers::from(&[40, 50][..])), Err(RegisterError::OutOfBounds { offset: 3 }));
+        assert_eq!(slice.write(usize::MAX, Registers::from(&[0][..])), Err(RegisterError::OutOfBounds { offset: usize::MAX }));
+        assert_eq!(slice, [1, 20, 30, 4]);
+
+        assert_eq!(slice.write(4, Registers::from(&[][..])), Ok(()));
+    }
+
+    #[test]
+    fn write_whole_register_001() {
+        let mut reg = RegU32::new(0);
+
+        assert_eq!(reg.write(0, Registers::from(&[0x1122, 0x3344][..])), Ok(()));
+        assert_eq!(u32::from(&reg), 0x11223344);
+
+        assert_eq!(reg.write(0, Registers::from(&[0xFFFF][..])), Err(RegisterError::PartialAccess));
+        assert_eq!(reg.write(1, Registers::from(&[0xFFFF][..])), Err(RegisterError::PartialAccess));
+        assert_eq!(reg.write(2, Registers::from(&[0xFFFF][..])), Err(RegisterError::OutOfBounds { offset: 2 }));
+        assert_eq!(reg.write(0, Registers::from(&[1, 2, 3][..])), Err(RegisterError::OutOfBounds { offset: 0 }));
+        assert_eq!(u32::from(&reg), 0x11223344);
+    }
+
+    #[test]
+    fn write_invalid_value_001() {
+        let mut reg = RegU8::new(0x12);
+        assert_eq!(reg.write(0, Registers::from(&[0x00FF][..])), Ok(()));
+        assert_eq!(u8::from(&reg), 0xFF);
+        assert_eq!(reg.write(0, Registers::from(&[0x0100][..])), Err(RegisterError::InvalidValue));
+        assert_eq!(reg.write(1, Registers::from(&[0x0100][..])), Err(RegisterError::OutOfBounds { offset: 1 }));
+        assert_eq!(u8::from(&reg), 0xFF);
+
+        let mut reg = RegBool::new(false);
+        assert_eq!(reg.write(0, Registers::from(&[0xFFFF][..])), Ok(()));
+        assert!(bool::from(&reg));
+        assert_eq!(reg.write(0, Registers::from(&[0x0000][..])), Ok(()));
+        assert!(!bool::from(&reg));
+        assert_eq!(reg.write(0, Registers::from(&[0x0001][..])), Err(RegisterError::InvalidValue));
+        assert!(!bool::from(&reg));
+    }
+
+    #[test]
+    fn write_rw_register_001() {
+        let mut reg = RW::new(RegU16::new(0));
+        assert_eq!(reg.write(0, Registers::from(&[0xABCD][..])), Ok(()));
+        assert_eq!(u16::from(reg.get()), 0xABCD);
+        assert_eq!(reg.write(1, Registers::from(&[0][..])), Err(RegisterError::OutOfBounds { offset: 1 }));
     }
 }
