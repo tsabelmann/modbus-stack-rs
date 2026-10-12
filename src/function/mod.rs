@@ -1,4 +1,7 @@
 pub mod read_holding_registers;
+pub mod read_input_registers;
+pub mod write_single_register;
+pub mod write_multiple_registers;
 
 use crate::{ExceptionCode, FunctionKind};
 
