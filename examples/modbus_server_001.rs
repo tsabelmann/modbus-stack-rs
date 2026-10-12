@@ -1,15 +1,18 @@
 //! Minimal Modbus/TCP server on port 1502.
 //!
 //! Serves 100 holding registers starting at address 0 and supports
-//! read holding registers (0x03) and write single register (0x06).
+//! read holding registers (0x03), write single register (0x06) and
+//! write multiple registers (0x10).
 
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 
-use modbus_stack::{encode_exception, read_holding_registers, write_single_register, DecodeError};
+use modbus_stack::{
+    encode_exception, read_holding_registers, write_multiple_registers, write_single_register, DecodeError, Registers,
+};
 use modbus_stack::tcp::{Frame, FrameParser};
 use modbus_stack::{ExceptionCode, FunctionCode, FunctionKind};
-use modbus_stack::register::ReadRegisterData;
+use modbus_stack::register::{ReadRegisterData, WriteRegisterData};
 
 const REGISTER_COUNT: usize = 100;
 
@@ -90,15 +93,33 @@ fn handle(frame: &mut Frame, registers: &mut [u16; REGISTER_COUNT]) {
         }
         FunctionKind::Normal(FunctionCode::WriteSingleRegister) => {
             let response = match write_single_register::Request::decode(frame) {
-                Ok(request) => match registers.get_mut(request.register_address() as usize) {
-                    Some(register) => {
-                        *register = request.register_value();
-                        write_single_register::Response::new(request.register_address(), request.register_value())
+                Ok(request) => {
+                    let start = request.register_address() as usize;
+                    let value = request.register_value();
+                    match registers.as_mut_slice().write(start, Registers::from(core::slice::from_ref(&value))) {
+                        Ok(()) => write_single_register::Response::new(request.register_address(), value),
+                        Err(err) => write_single_register::Response::new_exception(err.into()),
                     }
-                    None => write_single_register::Response::new_exception(ExceptionCode::IllegalDataAddress),
-                },
+                }
                 Err(DecodeError::Malformed(err)) => write_single_register::Response::new_exception(err.into()),
                 Err(_) => write_single_register::Response::new_exception(ExceptionCode::IllegalFunction),
+            };
+            response.encode(frame).expect("response fits into frame");
+        }
+        FunctionKind::Normal(FunctionCode::WriteMultipleRegisters) => {
+            let response = match write_multiple_registers::Request::decode(frame) {
+                Ok(request) => {
+                    let start = request.starting_address() as usize;
+                    match registers.as_mut_slice().write(start, request.registers()) {
+                        Ok(()) => write_multiple_registers::Response::new(
+                            request.starting_address(),
+                            request.quantity_of_registers(),
+                        ),
+                        Err(err) => write_multiple_registers::Response::new_exception(err.into()),
+                    }
+                }
+                Err(DecodeError::Malformed(err)) => write_multiple_registers::Response::new_exception(err.into()),
+                Err(_) => write_multiple_registers::Response::new_exception(ExceptionCode::IllegalFunction),
             };
             response.encode(frame).expect("response fits into frame");
         }
