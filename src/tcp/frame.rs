@@ -122,7 +122,10 @@ impl FrameEncoder for Frame {
     }
 
     fn finalize(&mut self, code: FunctionKind, payload_len: usize) {
-        assert!(payload_len < Self::MAX_SIZE - Self::HEADER_SIZE, "payload exceeds frame capacity");
+        assert!(
+            payload_len < Self::MAX_SIZE - Self::HEADER_SIZE,
+            "payload exceeds frame capacity"
+        );
 
         // function code
         self.data[Self::HEADER_SIZE] = u8::from(code);
