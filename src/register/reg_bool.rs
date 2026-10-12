@@ -1,4 +1,4 @@
-use crate::register::{WriteRegister, ReadRegister, IntoRegIter, IntoRegIterMut};
+use crate::register::{IntoRegIter, IntoRegIterMut};
 use super::{RegisterData, ReadRegisterData, WriteRegisterData, RegisterResult, RegisterError};
 
 /// Modbus register that can be converter to and from [bool].
@@ -91,18 +91,6 @@ impl<'a> IntoRegIterMut<'a> for &'a mut RegBool {
     type IntoIter = <&'a mut RegBool as IntoIterator>::IntoIter;
     fn into_reg_iter_mut(self) -> Self::IntoIter {
         self.into_iter()
-    }
-}
-
-impl WriteRegister<bool> for RegBool {
-    fn write(&mut self, value: bool) {
-        *self = RegBool::from(value);
-    }
-}
-
-impl<'a> ReadRegister<bool> for &'a RegBool {
-    fn read(self) -> bool {
-        bool::from(self)
     }
 }
 

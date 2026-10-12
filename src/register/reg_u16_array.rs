@@ -1,4 +1,4 @@
-use super::{ReadRegister, WriteRegister, IntoRegIter, IntoRegIterMut};
+use super::{IntoRegIter, IntoRegIterMut};
 use core::{ops::{Index, IndexMut}};
 use super::{RegisterData, ReadRegisterData, WriteRegisterData, RegisterResult, RegisterError};
 
@@ -100,6 +100,12 @@ impl<const N: usize> From<&RegU16Array<N>> for [u16; N] {
     }
 }
 
+impl<const N: usize> AsRef<[u16]> for RegU16Array<N> {
+    fn as_ref(&self) -> &[u16] {
+        &self.data
+    }
+}
+
 impl<const N: usize> Index<usize> for RegU16Array<N> {
     type Output = u16;
     fn index(&self, index: usize) -> &Self::Output {
@@ -151,26 +157,6 @@ impl<'a, const N: usize> IntoRegIterMut<'a> for &'a mut RegU16Array<N>  {
     }
 }
 
-/* Write/Read Regiser */
-
-impl<const N: usize> WriteRegister<[u16; N]> for RegU16Array<N> {
-    fn write(&mut self, value: [u16; N]) {
-        *self = RegU16Array::from(value);
-    }
-}
-
-impl<'a, const N: usize> ReadRegister<[u16; N]> for &'a RegU16Array<N> {
-    fn read(self) -> [u16; N] {
-        self.into()
-    }
-}
-
-impl<'a, const N: usize> ReadRegister<&'a [u16]> for &'a RegU16Array<N> {
-    fn read(self) -> &'a [u16] {
-        &self.data
-    }
-}
-
 /* RegisterData */
 
 impl<const N: usize> RegisterData for RegU16Array<N> {
@@ -213,5 +199,11 @@ impl<const N: usize> WriteRegisterData for RegU16Array<N> {
 
 #[cfg(test)]
 mod reg_u16_array_tests {
+    use super::*;
 
+    #[test]
+    fn as_ref_001() {
+        let reg = RegU16Array::new([0x1234, 0x5678]);
+        assert_eq!(reg.as_ref(), &[0x1234, 0x5678]);
+    }
 }

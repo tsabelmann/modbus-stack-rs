@@ -1,4 +1,4 @@
-use super::{ReadRegister, WriteRegister, IntoRegIter, IntoRegIterMut};
+use super::{IntoRegIter, IntoRegIterMut};
 use super::{RegisterData, ReadRegisterData, WriteRegisterData, RegisterResult, RegisterError};
 
 /// Modbus register that can be converter to and from [f64].
@@ -100,18 +100,6 @@ impl<'a> IntoRegIterMut<'a> for &'a mut RegF64 {
     type IntoIter = <&'a mut RegF64 as IntoIterator>::IntoIter;
     fn into_reg_iter_mut(self) -> Self::IntoIter {
         self.into_iter()
-    }
-}
-
-impl WriteRegister<f64> for RegF64 {
-    fn write(&mut self, value: f64) {
-        *self = RegF64::from(value);
-    }
-}
-
-impl<'a> ReadRegister<f64> for &'a RegF64 {
-    fn read(self) -> f64 {
-        f64::from(self)
     }
 }
 

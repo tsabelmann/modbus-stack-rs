@@ -1,4 +1,4 @@
-use super::{ReadRegister, WriteRegister, IntoRegIter, IntoRegIterMut};
+use super::{IntoRegIter, IntoRegIterMut};
 use super::{RegisterData, ReadRegisterData, WriteRegisterData, RegisterResult, RegisterError};
 
 /// Modbus register that can be converter to and from [u64].
@@ -95,18 +95,6 @@ impl<'a> IntoRegIterMut<'a> for &'a mut RegU64 {
 }
 
 /* Read/Write Register */
-
-impl WriteRegister<u64> for RegU64 {
-    fn write(&mut self, value: u64) {
-        *self = RegU64::from(value);
-    }
-}
-
-impl<'a> ReadRegister<u64> for &'a RegU64 {
-    fn read(self) -> u64 {
-        u64::from(self)
-    }
-}
 
 /* RegisterData */
 

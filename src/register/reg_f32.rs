@@ -1,4 +1,4 @@
-use super::{ReadRegister, WriteRegister, IntoRegIter, IntoRegIterMut};
+use super::{IntoRegIter, IntoRegIterMut};
 use super::{RegisterData, ReadRegisterData, WriteRegisterData, RegisterResult, RegisterError};
 
 /// Modbus register that can be converter to and from [f32].
@@ -94,18 +94,6 @@ impl<'a> IntoRegIterMut<'a> for &'a mut RegF32 {
     type IntoIter = <&'a mut RegF32 as IntoIterator>::IntoIter;
     fn into_reg_iter_mut(self) -> Self::IntoIter {
         self.into_iter()
-    }
-}
-
-impl WriteRegister<f32> for RegF32 {
-    fn write(&mut self, value: f32) {
-        *self = RegF32::from(value);
-    }
-}
-
-impl<'a> ReadRegister<f32> for &'a RegF32 {
-    fn read(self) -> f32 {
-        f32::from(self)
     }
 }
 

@@ -1,46 +1,46 @@
-pub mod atomic;
+// pub mod atomic;
 
 mod reg_bool;
-pub use reg_bool::{RegBool};
+pub use reg_bool::RegBool;
 
 mod reg_u8;
-pub use reg_u8::{RegU8};
+pub use reg_u8::RegU8;
 
 mod reg_u16;
-pub use reg_u16::{RegU16};
+pub use reg_u16::RegU16;
 
 mod reg_u32;
-pub use reg_u32::{RegU32};
+pub use reg_u32::RegU32;
 
 mod reg_u64;
-pub use reg_u64::{RegU64};
+pub use reg_u64::RegU64;
 
 // signed integer based registers
 
 mod reg_i8;
-pub use reg_i8::{RegI8};
+pub use reg_i8::RegI8;
 
 mod reg_i16;
-pub use reg_i16::{RegI16};
+pub use reg_i16::RegI16;
 
 mod reg_i32;
-pub use reg_i32::{RegI32};
+pub use reg_i32::RegI32;
 
 mod reg_i64;
-pub use reg_i64::{RegI64};
+pub use reg_i64::RegI64;
 
 // IEEE-754 floats
 
 mod reg_f32;
-pub use reg_f32::{RegF32};
+pub use reg_f32::RegF32;
 
 mod reg_f64;
-pub use reg_f64::{RegF64};
+pub use reg_f64::RegF64;
 
 // Array
 
 mod reg_u16_array;
-pub use reg_u16_array::{RegU16Array};
+pub use reg_u16_array::RegU16Array;
 
 /// Trait for turning a reference into a immutable register iterator.
 pub trait IntoRegIter<'a> {
@@ -70,16 +70,6 @@ pub trait IntoRegIterMut<'a> {
 //     }
 // }
 
-/// Trait for setting internal registers based on the provided value of type T
-pub trait WriteRegister<T> {
-    fn write(&mut self, value: T);
-}
-
-/// Trait for getting the value of type T from the internal registers
-pub trait ReadRegister<T> {
-    fn read(self) -> T;
-}
-
 /// Mögliche Fehler bei Register-Operationen
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RegisterError {
@@ -89,14 +79,14 @@ pub enum RegisterError {
     AccessDenied,
     /// Read/Write would exceed the maximum allowed offset.
     /// Should **not** be implemented for basic registers.
-    Overflow
+    Overflow,
 }
 
 pub type RegisterResult<T> = Result<T, RegisterError>;
 
 pub trait RegisterData {
     /// Retrieves the maximum register span, including holes
-    /// that are not accessible. 
+    /// that are not accessible.
     fn register_span(&self) -> usize;
 }
 
@@ -106,7 +96,7 @@ pub trait ReadRegisterData {
 
 pub trait WriteRegisterData {
     fn write(&mut self, offset: usize, buf: &[u16]) -> RegisterResult<usize>;
-}   
+}
 
 impl RegisterData for &[u16] {
     fn register_span(&self) -> usize {
@@ -163,26 +153,30 @@ impl WriteRegisterData for &mut [u16] {
 /// Read-only register enforced by the type system.
 #[derive(Debug)]
 pub struct RO<T> {
-    data: T
+    data: T,
 }
 
 impl<T> RO<T> {
-    pub const fn new(value: T)-> RO<T> {
-        RO {
-            data: value
-        }
+    pub const fn new(value: T) -> RO<T> {
+        RO { data: value }
+    }
+
+    /// Returns a reference to the wrapped register.
+    pub const fn get(&self) -> &T {
+        &self.data
     }
 
     pub fn modify<F, U>(&mut self, f: F) -> U
-    where F: FnOnce(&mut T) -> U 
+    where
+        F: FnOnce(&mut T) -> U,
     {
         f(&mut self.data)
     }
 }
 
-
-impl<'a, T> IntoIterator for &'a RO<T> 
-where &'a T: IntoRegIter<'a>
+impl<'a, T> IntoIterator for &'a RO<T>
+where
+    &'a T: IntoRegIter<'a>,
 {
     type Item = &'a u16;
     type IntoIter = <&'a T as IntoRegIter<'a>>::IntoIter;
@@ -197,10 +191,10 @@ where &'a T: IntoRegIter<'a>
 //     fn into_iter(self) -> Self::IntoIter {
 //         self.data.into_iter()
 //     }
-// } 
+// }
 
-// impl<'a, T> IntoIterator for &'a RO<T> 
-// where 
+// impl<'a, T> IntoIterator for &'a RO<T>
+// where
 //     &'a T : IntoIterator<Item = &'a u16>
 // {
 //     type Item = <&'a T as IntoIterator>::Item;
@@ -222,24 +216,6 @@ impl<T: Default> Default for RO<T> {
     }
 }
 
-impl<'a, T, U> ReadRegister<U> for &'a RO<T> 
-where 
-    &'a T: ReadRegister<U>    
-{
-    fn read(self) -> U {
-        self.data.read()   
-    }
-}
-
-impl<T, U> WriteRegister<U> for RO<T> 
-where 
-    T: WriteRegister<U>    
-{
-    fn write(&mut self, value: U) {
-        self.data.write(value);
-    }
-}
-
 impl<T: RegisterData> RegisterData for RO<T> {
     fn register_span(&self) -> usize {
         self.data.register_span()
@@ -255,25 +231,30 @@ impl<T: ReadRegisterData> ReadRegisterData for RO<T> {
 /// Read and writable register.
 #[derive(Debug)]
 pub struct RW<T> {
-    data: T
+    data: T,
 }
 
 impl<T> RW<T> {
-    pub const fn new(value: T)-> RW<T> {
-        RW {
-            data: value
-        }
+    pub const fn new(value: T) -> RW<T> {
+        RW { data: value }
+    }
+
+    /// Returns a reference to the wrapped register.
+    pub const fn get(&self) -> &T {
+        &self.data
     }
 
     pub fn modify<F, U>(&mut self, f: F) -> U
-    where F: FnOnce(&mut T) -> U 
+    where
+        F: FnOnce(&mut T) -> U,
     {
         f(&mut self.data)
     }
 }
 
-impl<'a, T> IntoIterator for &'a RW<T> 
-where &'a T: IntoRegIter<'a>
+impl<'a, T> IntoIterator for &'a RW<T>
+where
+    &'a T: IntoRegIter<'a>,
 {
     type Item = &'a u16;
     type IntoIter = <&'a T as IntoRegIter<'a>>::IntoIter;
@@ -282,8 +263,9 @@ where &'a T: IntoRegIter<'a>
     }
 }
 
-impl<'a, T> IntoIterator for &'a mut RW<T> 
-where &'a mut T: IntoRegIterMut<'a>
+impl<'a, T> IntoIterator for &'a mut RW<T>
+where
+    &'a mut T: IntoRegIterMut<'a>,
 {
     type Item = &'a mut u16;
     type IntoIter = <&'a mut T as IntoRegIterMut<'a>>::IntoIter;
@@ -298,10 +280,10 @@ where &'a mut T: IntoRegIterMut<'a>
 //     fn into_iter(self) -> Self::IntoIter {
 //         self.data.into_iter()
 //     }
-// } 
+// }
 
-// impl<'a, T> IntoIterator for &'a RW<T> 
-// where 
+// impl<'a, T> IntoIterator for &'a RW<T>
+// where
 //     &'a T : IntoIterator<Item = &'a u16>
 // {
 //     type Item = <&'a T as IntoIterator>::Item;
@@ -311,8 +293,8 @@ where &'a mut T: IntoRegIterMut<'a>
 //     }
 // }
 
-// impl<'a, T> IntoIterator for &'a mut RW<T> 
-// where 
+// impl<'a, T> IntoIterator for &'a mut RW<T>
+// where
 //     &'a mut T : IntoIterator<Item = &'a mut u16>
 // {
 //     type Item = <&'a mut T as IntoIterator>::Item;
@@ -331,24 +313,6 @@ impl<T: Clone> Clone for RW<T> {
 impl<T: Default> Default for RW<T> {
     fn default() -> Self {
         RW::new(T::default())
-    }
-}
-
-impl<'a, T, U> ReadRegister<U> for &'a RW<T> 
-where 
-    &'a T: ReadRegister<U>    
-{
-    fn read(self) -> U {
-        (&self.data).read()
-    }
-}
-
-impl<T, U> WriteRegister<U> for RW<T> 
-where 
-    T: WriteRegister<U>
-{
-    fn write(&mut self, value: U) {
-        self.data.write(value);    
     }
 }
 
@@ -389,7 +353,7 @@ mod register_tests {
         let iter3 = reg3.into_reg_iter();
         let iter4 = reg4.into_reg_iter();
 
-        let mut iter = iter0.chain(iter1).chain(iter2).chain(iter3).chain(iter4); 
+        let mut iter = iter0.chain(iter1).chain(iter2).chain(iter3).chain(iter4);
         assert_eq!(Some(&0xFFFF), iter.next());
         assert_eq!(Some(&0x0012), iter.next());
         assert_eq!(Some(&0xADAC), iter.next());
@@ -425,7 +389,7 @@ mod register_tests {
         let iter3 = reg3.into_iter();
         let iter4 = reg4.into_iter();
 
-        let mut iter = iter0.chain(iter1).chain(iter2).chain(iter3).chain(iter4); 
+        let mut iter = iter0.chain(iter1).chain(iter2).chain(iter3).chain(iter4);
         assert_eq!(Some(&0xFFFF), iter.next());
         assert_eq!(Some(&0x0012), iter.next());
         assert_eq!(Some(&0xADAC), iter.next());
@@ -461,7 +425,7 @@ mod register_tests {
         let iter3 = reg3.into_iter();
         let iter4 = reg4.into_iter();
 
-        let mut iter = iter0.chain(iter1).chain(iter2).chain(iter3).chain(iter4); 
+        let mut iter = iter0.chain(iter1).chain(iter2).chain(iter3).chain(iter4);
         assert_eq!(Some(&0xFFFF), iter.next());
         assert_eq!(Some(&0x0012), iter.next());
         assert_eq!(Some(&0xADAC), iter.next());
@@ -489,4 +453,15 @@ mod register_tests {
         assert_eq!(size_of::<RO<RegF64>>(), size_of::<RegF64>());
     }
 
+    #[test]
+    fn get_ro_register_001() {
+        let reg = RO::new(RegU32::new(42));
+        assert_eq!(u32::from(reg.get()), 42);
+    }
+
+    #[test]
+    fn get_rw_register_001() {
+        let reg = RW::new(RegF32::new(1.5));
+        assert_eq!(f32::from(reg.get()), 1.5);
+    }
 }

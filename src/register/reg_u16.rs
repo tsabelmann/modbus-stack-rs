@@ -1,4 +1,4 @@
-use super::{ReadRegister, WriteRegister, IntoRegIter, IntoRegIterMut};
+use super::{IntoRegIter, IntoRegIterMut};
 use super::{RegisterData, ReadRegisterData, WriteRegisterData, RegisterResult, RegisterError};
 
 /// Modbus register that can be converter to and from [u16].
@@ -85,26 +85,6 @@ impl<'a> IntoRegIterMut<'a> for &'a mut RegU16 {
     type IntoIter = <&'a mut RegU16 as IntoIterator>::IntoIter;
     fn into_reg_iter_mut(self) -> Self::IntoIter {
         self.into_iter()
-    }
-}
-
-/* Write/Read Register */
-
-impl WriteRegister<u16> for RegU16 {
-    fn write(&mut self, value: u16) {
-        *self = RegU16::from(value);
-    }
-}
-
-impl<'a> ReadRegister<u16> for &'a RegU16 {
-    fn read(self) -> u16 {
-        u16::from(self)
-    }
-}
-
-impl<'a> ReadRegister<&'a u16> for &'a RegU16 {
-    fn read(self) -> &'a u16 {
-        &self.data[0]
     }
 }
 

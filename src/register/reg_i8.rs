@@ -1,4 +1,4 @@
-use super::{ReadRegister, WriteRegister, IntoRegIter, IntoRegIterMut};
+use super::{IntoRegIter, IntoRegIterMut};
 
 /// Modbus register that can be converter to and from [i8].
 #[derive(Debug, PartialEq, Default, Clone)]
@@ -82,18 +82,6 @@ impl<'a> IntoRegIterMut<'a> for &'a mut RegI8 {
     type IntoIter = <&'a mut RegI8 as IntoIterator>::IntoIter;
     fn into_reg_iter_mut(self) -> Self::IntoIter {
         self.into_iter()
-    }
-}
-
-impl WriteRegister<i8> for RegI8 {
-    fn write(&mut self, value: i8) {
-        *self = RegI8::from(value);
-    }
-}
-
-impl<'a> ReadRegister<i8> for &'a RegI8 {
-    fn read(self) -> i8 {
-        i8::from(self)
     }
 }
 

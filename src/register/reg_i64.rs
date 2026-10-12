@@ -1,4 +1,4 @@
-use super::{ReadRegister, WriteRegister, IntoRegIter, IntoRegIterMut};
+use super::{IntoRegIter, IntoRegIterMut};
 use super::{RegisterData, ReadRegisterData, WriteRegisterData, RegisterResult, RegisterError};
 
 /// Modbus register that can be converter to and from [i64].
@@ -53,18 +53,6 @@ impl From<&RegI64> for i64 {
     fn from(value: &RegI64) -> Self {
         let result = ((value.data[0] as i64) << 48) | ((value.data[1] as i64) << 32) | ((value.data[2] as i64) << 16) | (value.data[3] as i64);
         result
-    }
-}
-
-impl WriteRegister<i64> for RegI64 {
-    fn write(&mut self, value: i64) {
-        *self = RegI64::from(value);
-    }
-}
-
-impl<'a> ReadRegister<i64> for &'a RegI64 {
-    fn read(self) -> i64 {
-        i64::from(self)
     }
 }
 
