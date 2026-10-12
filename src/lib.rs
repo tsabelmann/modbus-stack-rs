@@ -7,11 +7,12 @@ extern crate std;
 /// Modbus related constants for frame size, number of registers, etc.
 pub mod constants;
 
-pub mod decode;
-
 /// Function related types, grouped by function code.
 mod function;
-pub use function::{read_holding_registers, DecodeError, Malformed, Registers};
+pub use function::{
+    read_holding_registers, read_input_registers, write_single_register, write_multiple_registers,
+    DecodeError, Malformed, Registers,
+};
 
 pub mod encode;
 
