@@ -1,4 +1,6 @@
-use super::{ReadRegisterData, RegisterData, RegisterError, RegisterResult, WriteRegisterData, read_words};
+use super::{
+    ReadRegisterData, RegisterData, RegisterError, RegisterResult, WriteRegisterData, read_words,
+};
 use crate::register::{IntoRegIter, IntoRegIterMut};
 
 /// Modbus register that can be converter to and from [bool].
