@@ -242,25 +242,6 @@ where
     }
 }
 
-// impl<T: IntoIterator<Item = u16>> IntoIterator for RO<T> {
-//     type Item = T::Item;
-//     type IntoIter = T::IntoIter;
-//     fn into_iter(self) -> Self::IntoIter {
-//         self.data.into_iter()
-//     }
-// }
-
-// impl<'a, T> IntoIterator for &'a RO<T>
-// where
-//     &'a T : IntoIterator<Item = &'a u16>
-// {
-//     type Item = <&'a T as IntoIterator>::Item;
-//     type IntoIter = <&'a T as IntoIterator>::IntoIter;
-//     fn into_iter(self) -> Self::IntoIter {
-//         (&self.data).into_iter()
-//     }
-// }
-
 impl<T: Clone> Clone for RO<T> {
     fn clone(&self) -> Self {
         RO::new(self.data.clone())
@@ -340,36 +321,6 @@ where
         (&mut self.data).into_reg_iter_mut()
     }
 }
-
-// impl<T: IntoIterator<Item = u16>> IntoIterator for RW<T> {
-//     type Item = T::Item;
-//     type IntoIter = T::IntoIter;
-//     fn into_iter(self) -> Self::IntoIter {
-//         self.data.into_iter()
-//     }
-// }
-
-// impl<'a, T> IntoIterator for &'a RW<T>
-// where
-//     &'a T : IntoIterator<Item = &'a u16>
-// {
-//     type Item = <&'a T as IntoIterator>::Item;
-//     type IntoIter = <&'a T as IntoIterator>::IntoIter;
-//     fn into_iter(self) -> Self::IntoIter {
-//         (&self.data).into_iter()
-//     }
-// }
-
-// impl<'a, T> IntoIterator for &'a mut RW<T>
-// where
-//     &'a mut T : IntoIterator<Item = &'a mut u16>
-// {
-//     type Item = <&'a mut T as IntoIterator>::Item;
-//     type IntoIter = <&'a mut T as IntoIterator>::IntoIter;
-//     fn into_iter(self) -> Self::IntoIter {
-//         (&mut self.data).into_iter()
-//     }
-// }
 
 impl<T: Clone> Clone for RW<T> {
     fn clone(&self) -> Self {
@@ -710,9 +661,18 @@ mod register_tests {
     #[test]
     fn write_ro_register_001() {
         let mut reg = RO::new(RegU16::new(0xABCD));
-        assert_eq!(reg.write(0, Registers::from(&[1][..])), Err(RegisterError::AccessDenied));
-        assert_eq!(reg.write(1, Registers::from(&[1][..])), Err(RegisterError::OutOfBounds { offset: 1 }));
-        assert_eq!(reg.write(0, Registers::from(&[1, 2][..])), Err(RegisterError::OutOfBounds { offset: 0 }));
+        assert_eq!(
+            reg.write(0, Registers::from(&[1][..])),
+            Err(RegisterError::AccessDenied)
+        );
+        assert_eq!(
+            reg.write(1, Registers::from(&[1][..])),
+            Err(RegisterError::OutOfBounds { offset: 1 })
+        );
+        assert_eq!(
+            reg.write(0, Registers::from(&[1, 2][..])),
+            Err(RegisterError::OutOfBounds { offset: 0 })
+        );
         assert_eq!(u16::from(reg.get()), 0xABCD);
     }
 
