@@ -51,8 +51,7 @@ impl From<RegU64> for u64 {
 
 impl From<&RegU64> for u64 {
     fn from(value: &RegU64) -> Self {
-        let result = ((value.data[0] as u64) << 48) | ((value.data[1] as u64) << 32) | ((value.data[2] as u64) << 16) | (value.data[3] as u64);
-        result
+        ((value.data[0] as u64) << 48) | ((value.data[1] as u64) << 32) | ((value.data[2] as u64) << 16) | (value.data[3] as u64)
     }
 }
 
@@ -68,7 +67,7 @@ impl<'a> IntoIterator for &'a RegU64 {
     type Item = &'a u16;
     type IntoIter = core::slice::Iter<'a, u16>;
     fn into_iter(self) -> Self::IntoIter {
-        (&self.data).into_iter()
+        self.data.iter()
     }
 }
 
@@ -76,7 +75,7 @@ impl<'a> IntoIterator for &'a mut RegU64 {
     type Item = &'a mut u16;
     type IntoIter = core::slice::IterMut<'a, u16>;
     fn into_iter(self) -> Self::IntoIter {
-        (&mut self.data).into_iter()
+        self.data.iter_mut()
     }
 }
 

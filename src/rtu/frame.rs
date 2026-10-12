@@ -34,8 +34,7 @@ impl<'a> ModbusRtuFrame<'a> {
             self.data[self.data_length-2],
             self.data[self.data_length-1]
         ];
-        let crc = u16::from_le_bytes(data);
-        crc
+        u16::from_le_bytes(data)
     }
 }
 

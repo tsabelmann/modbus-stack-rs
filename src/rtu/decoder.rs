@@ -42,13 +42,12 @@ pub struct ModbusRtuFrameDecoder<'a> {
 
 impl<'a> ModbusRtuFrameDecoder<'a> {
     pub const fn new(data: &'a mut [u8; MODBUS_RTU_FRAME_DATA_LENGTH], decoder_direction: ModbusRtuFrameDecoderDirection) -> ModbusRtuFrameDecoder<'a> {
-        let decoder = ModbusRtuFrameDecoder {
+        ModbusRtuFrameDecoder {
             data,
             state: ModbusRtuFrameDecoderState::WaitForSlaveAddress,
             index: 0,
             decoder_direction
-        };
-        decoder
+        }
     }
 
     pub const fn expect_request(&mut self) {
@@ -289,10 +288,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0x01);
         let _ = decoder.push_data(0xB0);
-        match decoder.push_data(0x08) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x08), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     #[test]
@@ -306,10 +302,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0x0A);
         let _ = decoder.push_data(0x39);
-        match decoder.push_data(0x37) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x37), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     // ========== WRITE SINGLE COIL (0x05) ==========
@@ -325,10 +318,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0xFF);
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0x4C);
-        match decoder.push_data(0x1B) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x1B), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     #[test]
@@ -343,10 +333,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0xFF);
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0x4C);
-        match decoder.push_data(0x1B) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x1B), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     // ========== WRITE SINGLE REGISTER (0x06) ==========
@@ -362,10 +349,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0x03);
         let _ = decoder.push_data(0x98);
-        match decoder.push_data(0x0B) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x0B), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     #[test]
@@ -380,10 +364,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0x03);
         let _ = decoder.push_data(0x98);
-        match decoder.push_data(0x0B) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x0B), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     // ========== READ EXCEPTION STATUS (0x07) ==========
@@ -395,10 +376,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x01);
         let _ = decoder.push_data(0x07);
         let _ = decoder.push_data(0x41);
-        match decoder.push_data(0xE2) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0xE2), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     #[test]
@@ -410,10 +388,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x07);
         let _ = decoder.push_data(0x6D);
         let _ = decoder.push_data(0xE3);
-        match decoder.push_data(0xDD) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0xDD), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     // ========== GET COM EVENT COUNTER (0x0B) ==========
@@ -425,10 +400,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x01);
         let _ = decoder.push_data(0x0B);
         let _ = decoder.push_data(0x41);
-        match decoder.push_data(0xE7) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0xE7), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     #[test]
@@ -443,10 +415,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x01);
         let _ = decoder.push_data(0x08);
         let _ = decoder.push_data(0xA4);
-        match decoder.push_data(0x5D) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x5D), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     // ========== GET COM EVENT LOG (0x0C) ==========
@@ -458,10 +427,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x01);
         let _ = decoder.push_data(0x0C);
         let _ = decoder.push_data(0x00);
-        match decoder.push_data(0x25) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x25), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     #[test]
@@ -481,10 +447,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x20);
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0x0D);
-        match decoder.push_data(0xF7) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0xF7), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     // ========== WRITE MULTIPLE COILS (0x0F) ==========
@@ -503,10 +466,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0xCD);
         let _ = decoder.push_data(0x01);
         let _ = decoder.push_data(0x72);
-        match decoder.push_data(0xCB) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0xCB), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     #[test]
@@ -521,10 +481,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0x0A);
         let _ = decoder.push_data(0x24);
-        match decoder.push_data(0x09) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x09), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     // ========== WRITE MULTIPLE REGISTERS (0x10) ==========
@@ -545,10 +502,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x01);
         let _ = decoder.push_data(0x02);
         let _ = decoder.push_data(0x92);
-        match decoder.push_data(0x30) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x30), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     #[test]
@@ -563,10 +517,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0x02);
         let _ = decoder.push_data(0x10);
-        match decoder.push_data(0x08) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x08), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     // ========== READ FILE RECORD (0x14) ==========
@@ -586,10 +537,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0x02);
         let _ = decoder.push_data(0xD8);
-        match decoder.push_data(0xE5) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0xE5), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     // ========== MASK WRITE REGISTER (0x16) ==========
@@ -607,10 +555,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0x25);
         let _ = decoder.push_data(0x67);
-        match decoder.push_data(0xEE) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0xEE), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     #[test]
@@ -627,10 +572,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0x25);
         let _ = decoder.push_data(0x67);
-        match decoder.push_data(0xEE) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0xEE), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     // ========== READ WRITE MULTIPLE REGISTERS (0x17) ==========
@@ -657,10 +599,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0xFF);
         let _ = decoder.push_data(0x46);
-        match decoder.push_data(0x91) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x91), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     #[test]
@@ -684,10 +623,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0xFF);
         let _ = decoder.push_data(0x1D);
-        match decoder.push_data(0x79) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x79), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     // ========== READ FIFO QUEUE (0x18) ==========
@@ -701,10 +637,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x04);
         let _ = decoder.push_data(0xE8);
         let _ = decoder.push_data(0x83);
-        match decoder.push_data(0x51) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x51), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     // ========== EXCEPTION RESPONSES ==========
@@ -717,10 +650,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x81); // Exception: 0x01 + 0x80
         let _ = decoder.push_data(0x01); // Exception Code: Illegal Function
         let _ = decoder.push_data(0x81);
-        match decoder.push_data(0x90) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x90), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     #[test]
@@ -732,10 +662,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x83); // Exception: 0x03 + 0x80
         let _ = decoder.push_data(0x02); // Exception Code: Illegal Data Address
         let _ = decoder.push_data(0xC0);
-        match decoder.push_data(0xF1) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0xF1), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     #[test]
@@ -747,10 +674,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x84); // Exception: 0x04 + 0x80
         let _ = decoder.push_data(0x03); // Exception Code: Illegal Data Value
         let _ = decoder.push_data(0x03);
-        match decoder.push_data(0x01) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x01), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     #[test]
@@ -762,10 +686,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x86); // Exception: 0x06 + 0x80
         let _ = decoder.push_data(0x04); // Exception Code: Slave Device Failure
         let _ = decoder.push_data(0x43);
-        match decoder.push_data(0xA3) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0xA3), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     #[test]
@@ -777,10 +698,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x90); // Exception: 0x10 + 0x80
         let _ = decoder.push_data(0x05); // Exception Code: Acknowledge
         let _ = decoder.push_data(0x8C);
-        match decoder.push_data(0x03) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x03), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     #[test]
@@ -792,10 +710,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x8F); // Exception: 0x0F + 0x80
         let _ = decoder.push_data(0x0A); // Exception Code: Gateway Path Unavailable
         let _ = decoder.push_data(0xC4);
-        match decoder.push_data(0x37) {
-            ModbusRtuFrameDecoderResult::Success(_frame) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x37), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     // ========== CRC ERROR TESTS ==========
@@ -811,10 +726,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0x02);
         let _ = decoder.push_data(0xFF); // Wrong CRC
-        match decoder.push_data(0xFF) {
-            ModbusRtuFrameDecoderResult::CrcError => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0xFF), ModbusRtuFrameDecoderResult::CrcError));
     }
 
     #[test]
@@ -829,10 +741,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0xFF);
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0x00); // Wrong CRC
-        match decoder.push_data(0x00) {
-            ModbusRtuFrameDecoderResult::CrcError => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x00), ModbusRtuFrameDecoderResult::CrcError));
     }
 
     #[test]
@@ -848,10 +757,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0x05);
         let _ = decoder.push_data(0xAA); // Wrong CRC
-        match decoder.push_data(0xBB) {
-            ModbusRtuFrameDecoderResult::CrcError => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0xBB), ModbusRtuFrameDecoderResult::CrcError));
     }
 
     #[test]
@@ -863,10 +769,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x83); // Exception
         let _ = decoder.push_data(0x02);
         let _ = decoder.push_data(0x12); // Wrong CRC
-        match decoder.push_data(0x34) {
-            ModbusRtuFrameDecoderResult::CrcError => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x34), ModbusRtuFrameDecoderResult::CrcError));
     }
 
     #[test]
@@ -886,10 +789,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x01);
         let _ = decoder.push_data(0x02);
         let _ = decoder.push_data(0x11); // Wrong CRC
-        match decoder.push_data(0x22) {
-            ModbusRtuFrameDecoderResult::CrcError => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x22), ModbusRtuFrameDecoderResult::CrcError));
     }
 
     // ========== MODE SWITCHING TESTS ==========
@@ -906,10 +806,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0x02);
         let _ = decoder.push_data(0xC4);
-        match decoder.push_data(0x0B) {
-            ModbusRtuFrameDecoderResult::Success(_) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x0B), ModbusRtuFrameDecoderResult::Success(_)));
 
         // Switch to response mode
         decoder.expect_response();
@@ -923,10 +820,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0x05);
         let _ = decoder.push_data(0xDA);
-        match decoder.push_data(0x31) {
-            ModbusRtuFrameDecoderResult::Success(_) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x31), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     #[test]
@@ -943,10 +837,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0x05);
         let _ = decoder.push_data(0xDA);
-        match decoder.push_data(0x31) {
-            ModbusRtuFrameDecoderResult::Success(_) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x31), ModbusRtuFrameDecoderResult::Success(_)));
 
         // Switch to request mode
         decoder.expect_request();
@@ -959,10 +850,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0x02);
         let _ = decoder.push_data(0xC4);
-        match decoder.push_data(0x0B) {
-            ModbusRtuFrameDecoderResult::Success(_) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x0B), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     // ========== MULTIPLE FRAMES IN SEQUENCE ==========
@@ -979,10 +867,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0x0D);
         let _ = decoder.push_data(0xDD);
-        match decoder.push_data(0x98) {
-            ModbusRtuFrameDecoderResult::Success(_) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x98), ModbusRtuFrameDecoderResult::Success(_)));
 
         // Second frame: Write Single Register
         let _ = decoder.push_data(0x01);
@@ -992,10 +877,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0x03);
         let _ = decoder.push_data(0x98);
-        match decoder.push_data(0x0B) {
-            ModbusRtuFrameDecoderResult::Success(_) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x0B), ModbusRtuFrameDecoderResult::Success(_)));
 
         // Third frame: Read Holding Registers
         let _ = decoder.push_data(0x01);
@@ -1005,10 +887,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0x02);
         let _ = decoder.push_data(0xC4);
-        match decoder.push_data(0x0B) {
-            ModbusRtuFrameDecoderResult::Success(_) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x0B), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     #[test]
@@ -1024,10 +903,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0x02);
         let _ = decoder.push_data(0xC4);
-        match decoder.push_data(0x0B) {
-            ModbusRtuFrameDecoderResult::Success(_) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x0B), ModbusRtuFrameDecoderResult::Success(_)));
 
         // Switch to response
         decoder.expect_response();
@@ -1041,10 +917,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0x05);
         let _ = decoder.push_data(0xDA);
-        match decoder.push_data(0x31) {
-            ModbusRtuFrameDecoderResult::Success(_) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x31), ModbusRtuFrameDecoderResult::Success(_)));
 
         // Switch back to request
         decoder.expect_request();
@@ -1057,10 +930,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0x03);
         let _ = decoder.push_data(0x98);
-        match decoder.push_data(0x0B) {
-            ModbusRtuFrameDecoderResult::Success(_) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x0B), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     // ========== EDGE CASES ==========
@@ -1073,10 +943,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x01);
         let _ = decoder.push_data(0x0B);
         let _ = decoder.push_data(0x41);
-        match decoder.push_data(0xE7) {
-            ModbusRtuFrameDecoderResult::Success(_) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0xE7), ModbusRtuFrameDecoderResult::Success(_)));
     }
 
     #[test]
@@ -1100,10 +967,7 @@ mod rtu_frames_extended_tests {
         let _ = decoder.push_data(0x00);
         let _ = decoder.push_data(0x02);
         let _ = decoder.push_data(0xC4);
-        match decoder.push_data(0x0B) {
-            ModbusRtuFrameDecoderResult::Success(_) => assert!(true),
-            _ => assert!(false)
-        }
+        assert!(matches!(decoder.push_data(0x0B), ModbusRtuFrameDecoderResult::Success(_)));
     }
 }
 

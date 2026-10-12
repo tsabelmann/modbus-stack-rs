@@ -49,10 +49,7 @@ impl From<RegBool> for bool {
 
 impl From<&RegBool> for bool {
     fn from(value: &RegBool) -> Self {
-        match value.data[0] {
-            0x0000 => false,
-            _ => true
-        }
+        value.data[0] != 0x0000
     }
 }
 
@@ -68,7 +65,7 @@ impl<'a> IntoIterator for &'a RegBool {
     type Item = &'a u16;
     type IntoIter = core::slice::Iter<'a, u16>;
     fn into_iter(self) -> Self::IntoIter {
-        (&self.data).into_iter()
+        self.data.iter()
     }
 }
 
@@ -76,7 +73,7 @@ impl<'a> IntoIterator for &'a mut RegBool {
     type Item = &'a mut u16;
     type IntoIter = core::slice::IterMut<'a, u16>;
     fn into_iter(self) -> Self::IntoIter {
-        (&mut self.data).into_iter()
+        self.data.iter_mut()
     }
 }
 
@@ -230,7 +227,7 @@ mod reg_bool_tests {
     fn from_to_u8_001() {
         let reg = RegBool::new(true);
         let value = bool::from(reg);
-        assert_eq!(value, true);
+        assert!(value);
     }
 
 }

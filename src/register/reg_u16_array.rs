@@ -131,7 +131,7 @@ impl<'a, const N: usize> IntoIterator for &'a RegU16Array<N> {
     type Item = &'a u16;
     type IntoIter = core::slice::Iter<'a, u16>;
     fn into_iter(self) -> Self::IntoIter {
-        (&self.data).into_iter()
+        self.data.iter()
     }
 }
 
@@ -139,7 +139,7 @@ impl<'a, const N: usize> IntoIterator for &'a mut RegU16Array<N> {
     type Item = &'a mut u16;
     type IntoIter = core::slice::IterMut<'a, u16>;
     fn into_iter(self) -> Self::IntoIter {
-        (&mut self.data).into_iter()
+        self.data.iter_mut()
     }
 }
 

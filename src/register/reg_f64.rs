@@ -77,7 +77,7 @@ impl<'a> IntoIterator for &'a RegF64 {
     type Item = &'a u16;
     type IntoIter = core::slice::Iter<'a, u16>;
     fn into_iter(self) -> Self::IntoIter {
-        (&self.data).into_iter()
+        self.data.iter()
     }
 }
 
@@ -85,7 +85,7 @@ impl<'a> IntoIterator for &'a mut RegF64 {
     type Item = &'a mut u16;
     type IntoIter = core::slice::IterMut<'a, u16>;
     fn into_iter(self) -> Self::IntoIter {
-        (&mut self.data).into_iter()
+        self.data.iter_mut()
     }
 }
 
@@ -172,13 +172,12 @@ mod reg_f64_tests {
 
         let data = {
             let data = 42.0f64.to_be_bytes();
-            let data = [
+            [
                 ((data[0] as u16) << 8) | (data[1] as u16),
                 ((data[2] as u16) << 8) | (data[3] as u16),
                 ((data[4] as u16) << 8) | (data[5] as u16),
                 ((data[6] as u16) << 8) | (data[7] as u16),
-            ];
-            data
+            ]
         };
 
         // change values

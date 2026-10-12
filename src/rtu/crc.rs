@@ -2,7 +2,7 @@
 pub fn rtu_crc(data: &[u8]) -> u16 {
     let mut crc = 0xFFFF;
     for byte in data {
-        crc = crc ^ (*byte as u16);
+        crc ^= *byte as u16;
         for _ in 0..8 {
             if crc & 0x0001 != 0 {
                 crc >>= 1;
@@ -21,9 +21,5 @@ pub fn check_rtu_crc(data: &[u8], crc_low: u8, crc_high: u8) -> bool {
     let computed_crc = rtu_crc(data);
     let bytes = computed_crc.to_le_bytes();
 
-    if bytes[0] == crc_low && bytes[1] == crc_high {
-        true
-    } else {
-        false
-    }
+    bytes[0] == crc_low && bytes[1] == crc_high
 }

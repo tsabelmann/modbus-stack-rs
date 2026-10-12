@@ -16,17 +16,11 @@ impl FunctionKind {
     }
 
     pub const fn is_exception(&self) -> bool {
-        match self {
-            FunctionKind::Exception(_) => true,
-            _ => false
-        }
+        matches!(self, FunctionKind::Exception(_))
     }
 
     pub const fn is_normal(&self) -> bool {
-        match self {
-            FunctionKind::Normal(_) => true,
-            _ => false
-        }
+        matches!(self, FunctionKind::Normal(_))
     }
 
     pub const fn function_code(&self) -> FunctionCode {
