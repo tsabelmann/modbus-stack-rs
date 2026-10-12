@@ -7,7 +7,6 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 
 use modbus_stack::{encode_exception, read_holding_registers, write_single_register, DecodeError};
-use modbus_stack::encode::response;
 use modbus_stack::tcp::{Frame, FrameParser};
 use modbus_stack::{ExceptionCode, FunctionCode, FunctionKind};
 
@@ -91,12 +90,12 @@ fn handle(frame: &mut Frame, registers: &mut [u16; REGISTER_COUNT]) {
                 Ok(request) => match registers.get_mut(request.register_address() as usize) {
                     Some(register) => {
                         *register = request.register_value();
-                        response::write_single_register::Response::new(request.register_address(), request.register_value())
+                        write_single_register::Response::new(request.register_address(), request.register_value())
                     }
-                    None => response::write_single_register::Response::new_exception(ExceptionCode::IllegalDataAddress),
+                    None => write_single_register::Response::new_exception(ExceptionCode::IllegalDataAddress),
                 },
-                Err(DecodeError::Malformed(err)) => response::write_single_register::Response::new_exception(err.into()),
-                Err(_) => response::write_single_register::Response::new_exception(ExceptionCode::IllegalFunction),
+                Err(DecodeError::Malformed(err)) => write_single_register::Response::new_exception(err.into()),
+                Err(_) => write_single_register::Response::new_exception(ExceptionCode::IllegalFunction),
             };
             response.encode(frame).expect("response fits into frame");
         }
