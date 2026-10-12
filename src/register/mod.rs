@@ -54,22 +54,6 @@ pub trait IntoRegIterMut<'a> {
     fn into_reg_iter_mut(self) -> Self::IntoIter;
 }
 
-// /// Auto implementation for [IntoRegIter] if it implements [IntoIterator<Item = &'a u16>].
-// impl<'a, T: IntoIterator<Item = &'a u16>> IntoRegIter<'a> for T {
-//     type IntoIter = T::IntoIter;
-//     fn into_reg_iter(self) -> Self::IntoIter {
-//         self.into_iter()
-//     }
-// }
-
-// /// Auto implementation for [IntoRegIterMut] if it implements [IntoIterator<Item = &'a u16>].
-// impl<'a, T: IntoIterator<Item = &'a mut u16>> IntoRegIterMut<'a> for T {
-//     type IntoIter = T::IntoIter;
-//     fn into_reg_iter_mut(self) -> Self::IntoIter {
-//         self.into_iter()
-//     }
-// }
-
 /// Mögliche Fehler bei Register-Operationen
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RegisterError {
