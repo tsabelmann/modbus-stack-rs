@@ -52,7 +52,7 @@ pub use at::At;
 // Composition
 
 mod cursor;
-pub use cursor::ReadCursor;
+pub use cursor::{ReadCursor, WriteCursor};
 
 /// Trait for turning a reference into a immutable register iterator.
 pub trait IntoRegIter<'a> {
@@ -107,7 +107,8 @@ pub trait ReadRegisterData: RegisterData {
 
 pub trait WriteRegisterData: RegisterData {
     /// Writes all `values` starting at `offset`.
-    /// On `Err` the register is left unchanged.
+    /// On `Err` a single register is left unchanged;
+    /// registers composed with [WriteCursor] may be partially written.
     fn write(&mut self, offset: usize, values: Registers<'_>) -> RegisterResult<()>;
 }
 
@@ -281,6 +282,16 @@ impl<T: RegisterData> RegisterData for RO<T> {
 impl<T: ReadRegisterData> ReadRegisterData for RO<T> {
     fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
         self.data.read(offset, buf)
+    }
+}
+
+/// Rejects every write within its span, so read-only registers can be part of writable models.
+impl<T: RegisterData> WriteRegisterData for RO<T> {
+    fn write(&mut self, offset: usize, values: Registers<'_>) -> RegisterResult<()> {
+        match offset.checked_add(values.len()) {
+            Some(end) if end <= self.register_span() => Err(RegisterError::AccessDenied),
+            _ => Err(RegisterError::OutOfBounds { offset }),
+        }
     }
 }
 
@@ -694,6 +705,15 @@ mod register_tests {
             Err(RegisterError::InvalidValue)
         );
         assert!(!bool::from(&reg));
+    }
+
+    #[test]
+    fn write_ro_register_001() {
+        let mut reg = RO::new(RegU16::new(0xABCD));
+        assert_eq!(reg.write(0, Registers::from(&[1][..])), Err(RegisterError::AccessDenied));
+        assert_eq!(reg.write(1, Registers::from(&[1][..])), Err(RegisterError::OutOfBounds { offset: 1 }));
+        assert_eq!(reg.write(0, Registers::from(&[1, 2][..])), Err(RegisterError::OutOfBounds { offset: 0 }));
+        assert_eq!(u16::from(reg.get()), 0xABCD);
     }
 
     #[test]
