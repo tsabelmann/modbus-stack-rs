@@ -1,31 +1,29 @@
+use super::{ReadRegisterData, RegisterData, RegisterError, RegisterResult, WriteRegisterData};
 use crate::register::{IntoRegIter, IntoRegIterMut};
-use super::{RegisterData, ReadRegisterData, WriteRegisterData, RegisterResult, RegisterError};
 
 /// Modbus register that can be converter to and from [bool].
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct RegBool {
-    data: [u16; 1]
+    data: [u16; 1],
 }
 
 impl RegBool {
     /// Creates a new [bool] based modbus register.
-    /// 
+    ///
     /// # Example
     ///
     /// ```
     /// use modbus_stack::register::RegBool;
-    /// 
+    ///
     /// let reg = RegBool::new(true);
     /// ````
     pub const fn new(value: bool) -> RegBool {
         let data = match value {
             false => [0x0000],
-            true => [0xFFFF]
+            true => [0xFFFF],
         };
-        
-        RegBool {
-            data
-        }
+
+        RegBool { data }
     }
 }
 
@@ -104,18 +102,14 @@ impl RegisterData for RegBool {
 impl ReadRegisterData for RegBool {
     fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<usize> {
         match offset {
-            0 => {
-                match buf.len() {
-                    0 => Ok(0),
-                    _ => {
-                        buf[0] = self.data[0];
-                        Ok(1)
-                    }
+            0 => match buf.len() {
+                0 => Ok(0),
+                _ => {
+                    buf[0] = self.data[0];
+                    Ok(1)
                 }
             },
-            _ => {
-                RegisterResult::Err(RegisterError::OutOfBounds { offset })
-            }
+            _ => RegisterResult::Err(RegisterError::OutOfBounds { offset }),
         }
     }
 }
@@ -125,26 +119,22 @@ impl ReadRegisterData for RegBool {
 impl WriteRegisterData for RegBool {
     fn write(&mut self, offset: usize, buf: &[u16]) -> RegisterResult<usize> {
         match offset {
-            0 => {
-                match buf.len() {
-                    0 => Ok(0),
-                    _ => {
-                        self.data[0] = buf[0] & 0x00FF;
-                        Ok(1)
-                    }
+            0 => match buf.len() {
+                0 => Ok(0),
+                _ => {
+                    self.data[0] = buf[0] & 0x00FF;
+                    Ok(1)
                 }
             },
-            _ => {
-                RegisterResult::Err(RegisterError::OutOfBounds { offset })
-            }
+            _ => RegisterResult::Err(RegisterError::OutOfBounds { offset }),
         }
     }
 }
 
 #[cfg(test)]
 mod reg_bool_tests {
-    use crate::register::{IntoRegIter, IntoRegIterMut};
     use super::*;
+    use crate::register::{IntoRegIter, IntoRegIterMut};
 
     #[test]
     fn reg_iter_001() {
@@ -191,7 +181,7 @@ mod reg_bool_tests {
         let iter1 = reg1.into_reg_iter_mut();
         let iter2 = reg2.into_reg_iter_mut();
         let iter3 = reg3.into_reg_iter_mut();
-        
+
         let mut iter = iter0.chain(iter1).chain(iter2).chain(iter3);
         if let Some(reff) = iter.next() {
             *reff = 42;
@@ -214,7 +204,7 @@ mod reg_bool_tests {
         let iter1 = reg1.into_reg_iter();
         let iter2 = reg2.into_reg_iter();
         let iter3 = reg3.into_reg_iter();
-        
+
         let mut iter = iter0.chain(iter1).chain(iter2).chain(iter3);
         assert_eq!(Some(&42), iter.next());
         assert_eq!(Some(&1337), iter.next());
@@ -229,5 +219,4 @@ mod reg_bool_tests {
         let value = bool::from(reg);
         assert!(value);
     }
-
 }
