@@ -6,7 +6,8 @@
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 
-use modbus_stack::decode::request::{read_holding_registers, write_single_register};
+use modbus_stack::decode::request::write_single_register;
+use modbus_stack::{read_holding_registers, DecodeError};
 use modbus_stack::encode::FrameEncoder;
 use modbus_stack::encode::response;
 use modbus_stack::tcp::{Frame, FrameParser};
@@ -73,7 +74,7 @@ fn serve(mut stream: TcpStream, registers: &mut [u16; REGISTER_COUNT]) -> std::i
 fn handle(frame: &mut Frame, registers: &mut [u16; REGISTER_COUNT]) {
     match frame.function_code() {
         FunctionKind::Normal(FunctionCode::ReadHoldingRegisters) => {
-            let response = match read_holding_registers::Request::new(frame) {
+            let response = match read_holding_registers::Request::decode(frame) {
                 Ok(request) => {
                     let start = request.starting_address() as usize;
                     let end = start + request.quantity_of_registers() as usize;
@@ -82,7 +83,8 @@ fn handle(frame: &mut Frame, registers: &mut [u16; REGISTER_COUNT]) {
                         None => response::read_holding_registers::Response::new_exception(ExceptionCode::IllegalDataAddress),
                     }
                 }
-                Err(_) => response::read_holding_registers::Response::new_exception(ExceptionCode::IllegalDataValue),
+                Err(DecodeError::Malformed(err)) => response::read_holding_registers::Response::new_exception(err.into()),
+                Err(_) => response::read_holding_registers::Response::new_exception(ExceptionCode::IllegalFunction),
             };
             response.encode(frame).expect("response fits into frame");
         }
