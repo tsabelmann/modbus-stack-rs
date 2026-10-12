@@ -14,8 +14,6 @@ pub use function::{
     encode_exception, DecodeError, EncodeError, Malformed, Registers,
 };
 
-pub mod encode;
-
 /// Register related types and helper functions.
 pub mod register;
 
