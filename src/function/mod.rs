@@ -1,7 +1,7 @@
 pub mod read_holding_registers;
 pub mod read_input_registers;
-pub mod write_single_register;
 pub mod write_multiple_registers;
+pub mod write_single_register;
 
 use crate::{ExceptionCode, FrameEncoder, FunctionCode, FunctionKind};
 
@@ -46,7 +46,9 @@ impl Malformed {
     /// Exception code a server responds with.
     pub const fn exception_code(&self) -> ExceptionCode {
         match self {
-            Malformed::Length | Malformed::Quantity | Malformed::ByteCount => ExceptionCode::IllegalDataValue,
+            Malformed::Length | Malformed::Quantity | Malformed::ByteCount => {
+                ExceptionCode::IllegalDataValue
+            }
         }
     }
 }
@@ -76,7 +78,11 @@ impl From<Malformed> for EncodeError {
 }
 
 /// Encodes an exception response for the given function.
-pub fn encode_exception(frame: &mut dyn FrameEncoder, function: FunctionCode, code: ExceptionCode) -> Result<(), EncodeError> {
+pub fn encode_exception(
+    frame: &mut dyn FrameEncoder,
+    function: FunctionCode,
+    code: ExceptionCode,
+) -> Result<(), EncodeError> {
     let Some(payload) = frame.payload_mut().first_mut() else {
         return Err(EncodeError::BufferTooSmall);
     };
@@ -106,7 +112,9 @@ enum Source<'a> {
 
 impl<'a> Registers<'a> {
     pub(crate) const fn new(data: &'a [u8]) -> Registers<'a> {
-        Registers { source: Source::Bytes(data) }
+        Registers {
+            source: Source::Bytes(data),
+        }
     }
 
     /// Writes the register values into `dest` and returns the number of written values.
@@ -122,7 +130,9 @@ impl<'a> Registers<'a> {
 
 impl<'a> From<&'a [u16]> for Registers<'a> {
     fn from(values: &'a [u16]) -> Self {
-        Registers { source: Source::Values(values) }
+        Registers {
+            source: Source::Values(values),
+        }
     }
 }
 
@@ -186,7 +196,10 @@ mod function_tests {
     fn registers_001() {
         let registers = Registers::new(&[0x02, 0x2B, 0x00, 0x00, 0x00, 0x64]);
         assert_eq!(registers.len(), 3);
-        assert_eq!(registers.collect::<std::vec::Vec<_>>(), [0x022B, 0x0000, 0x0064]);
+        assert_eq!(
+            registers.collect::<std::vec::Vec<_>>(),
+            [0x022B, 0x0000, 0x0064]
+        );
     }
 
     #[test]
@@ -215,7 +228,10 @@ mod function_tests {
         let values = [0x022B, 0x0000, 0x0064];
         let registers = Registers::from(&values[..]);
         assert_eq!(registers.len(), 3);
-        assert_eq!(registers, Registers::new(&[0x02, 0x2B, 0x00, 0x00, 0x00, 0x64]));
+        assert_eq!(
+            registers,
+            Registers::new(&[0x02, 0x2B, 0x00, 0x00, 0x00, 0x64])
+        );
         assert_ne!(registers, Registers::new(&[0x02, 0x2B, 0x00, 0x00]));
         assert_eq!(registers.collect::<std::vec::Vec<_>>(), values);
     }
@@ -223,14 +239,31 @@ mod function_tests {
     #[test]
     fn encode_exception_001() {
         let mut frame = crate::tcp::Frame::new(0x0001, 0x11);
-        encode_exception(&mut frame, FunctionCode::ReadCoils, ExceptionCode::IllegalFunction).unwrap();
-        assert_eq!(frame.as_bytes(), &[0x00, 0x01, 0x00, 0x00, 0x00, 0x03, 0x11, 0x81, 0x01]);
+        encode_exception(
+            &mut frame,
+            FunctionCode::ReadCoils,
+            ExceptionCode::IllegalFunction,
+        )
+        .unwrap();
+        assert_eq!(
+            frame.as_bytes(),
+            &[0x00, 0x01, 0x00, 0x00, 0x00, 0x03, 0x11, 0x81, 0x01]
+        );
     }
 
     #[test]
     fn malformed_001() {
-        assert_eq!(ExceptionCode::from(Malformed::Length), ExceptionCode::IllegalDataValue);
-        assert_eq!(ExceptionCode::from(Malformed::Quantity), ExceptionCode::IllegalDataValue);
-        assert_eq!(ExceptionCode::from(Malformed::ByteCount), ExceptionCode::IllegalDataValue);
+        assert_eq!(
+            ExceptionCode::from(Malformed::Length),
+            ExceptionCode::IllegalDataValue
+        );
+        assert_eq!(
+            ExceptionCode::from(Malformed::Quantity),
+            ExceptionCode::IllegalDataValue
+        );
+        assert_eq!(
+            ExceptionCode::from(Malformed::ByteCount),
+            ExceptionCode::IllegalDataValue
+        );
     }
 }
