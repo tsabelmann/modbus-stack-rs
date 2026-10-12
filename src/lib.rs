@@ -9,6 +9,10 @@ pub mod constants;
 
 pub mod decode;
 
+/// Function related types, grouped by function code.
+mod function;
+pub use function::{read_holding_registers, DecodeError, Malformed, Registers};
+
 pub mod encode;
 
 /// Register related types and helper functions.
