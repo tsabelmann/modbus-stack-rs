@@ -1,4 +1,5 @@
-use super::{ReadRegisterData, RegisterError, RegisterResult};
+use super::{ReadRegisterData, RegisterError, RegisterResult, WriteRegisterData};
+use crate::Registers;
 
 /// Distributes a read request over consecutive registers.
 ///
@@ -87,6 +88,65 @@ impl<'a> ReadCursor<'a> {
     }
 }
 
+/// Distributes a write request over consecutive registers.
+///
+/// Each visited register receives the part of the request that falls into its span;
+/// registers before or after the requested range are skipped.
+///
+/// Not atomic across registers: if a register fails, the registers visited before
+/// keep their new values. The failing register itself is left unchanged.
+pub struct WriteCursor<'a> {
+    /// Requested offset, used for error reporting.
+    start: usize,
+    /// Distance from the current register to the start of the requested range.
+    offset: usize,
+    /// Not yet written values.
+    values: Registers<'a>,
+}
+
+impl<'a> WriteCursor<'a> {
+    pub fn new(offset: usize, values: Registers<'a>) -> WriteCursor<'a> {
+        WriteCursor {
+            start: offset,
+            offset,
+            values,
+        }
+    }
+
+    /// Writes the part of the request that falls into `reg`, then advances past `reg`.
+    pub fn visit(&mut self, reg: &mut dyn WriteRegisterData) -> RegisterResult<()> {
+        let span = reg.register_span();
+
+        // `reg` lies completely before the requested range
+        if self.offset >= span {
+            self.offset -= span;
+            return Ok(());
+        }
+
+        // `reg` lies after the requested range
+        if self.values.len() == 0 {
+            self.offset = 0;
+            return Ok(());
+        }
+
+        let n = self.values.len().min(span - self.offset);
+        let (head, tail) = self.values.clone().split_at(n);
+        reg.write(self.offset, head)?;
+        self.values = tail;
+        self.offset = 0;
+        Ok(())
+    }
+
+    /// Fails with [RegisterError::OutOfBounds] if the requested range reaches beyond the last visited register.
+    pub fn finish(self) -> RegisterResult<()> {
+        if self.offset == 0 && self.values.len() == 0 {
+            Ok(())
+        } else {
+            Err(RegisterError::OutOfBounds { offset: self.start })
+        }
+    }
+}
+
 #[cfg(test)]
 mod cursor_tests {
     use super::*;
@@ -115,6 +175,16 @@ mod cursor_tests {
         }
     }
 
+    impl WriteRegisterData for Inner {
+        fn write(&mut self, offset: usize, values: Registers<'_>) -> RegisterResult<()> {
+            let mut cursor = WriteCursor::new(offset, values);
+            cursor.visit(&mut self.id)?;
+            cursor.visit(&mut self.len)?;
+            cursor.visit(&mut self.value)?;
+            cursor.finish()
+        }
+    }
+
     /// SunSpec-like map: marker, model, end marker.
     struct Map {
         suns: RO<RegU16Array<2>>,
@@ -136,6 +206,24 @@ mod cursor_tests {
             }
             cursor.finish()
         }
+    }
+
+    impl WriteRegisterData for Map {
+        fn write(&mut self, offset: usize, values: Registers<'_>) -> RegisterResult<()> {
+            let mut cursor = WriteCursor::new(offset, values);
+            for reg in [&mut self.suns as &mut dyn WriteRegisterData, &mut self.model, &mut self.end] {
+                cursor.visit(reg)?;
+            }
+            cursor.finish()
+        }
+    }
+
+    const ALL: [u16; 8] = [0x5375, 0x6E53, 1, 2, 0x1122, 0x3344, 0xFFFF, 0x0000];
+
+    fn read_all(map: &Map) -> [u16; 8] {
+        let mut buf = [0u16; 8];
+        map.read(0, &mut buf).unwrap();
+        buf
     }
 
     fn map() -> Map {
@@ -237,5 +325,68 @@ mod cursor_tests {
         assert_eq!(buf, [0x5375, 0x6E53, 1, 2]);
 
         assert_eq!(map.read(39999, &mut buf), Err(RegisterError::OutOfBounds { offset: 39999 }));
+    }
+
+    #[test]
+    fn write_value_001() {
+        let mut map = map();
+        assert_eq!(map.write(4, Registers::from(&[0xAABB, 0xCCDD][..])), Ok(()));
+        assert_eq!(read_all(&map), [0x5375, 0x6E53, 1, 2, 0xAABB, 0xCCDD, 0xFFFF, 0x0000]);
+    }
+
+    #[test]
+    fn write_read_only_001() {
+        let mut map = map();
+        assert_eq!(map.write(2, Registers::from(&[9][..])), Err(RegisterError::AccessDenied));
+        assert_eq!(map.write(0, Registers::from(&[9, 9][..])), Err(RegisterError::AccessDenied));
+        assert_eq!(read_all(&map), ALL);
+    }
+
+    #[test]
+    fn write_partial_access_001() {
+        let mut map = map();
+        assert_eq!(map.write(5, Registers::from(&[9][..])), Err(RegisterError::PartialAccess));
+        assert_eq!(map.write(5, Registers::from(&[9, 9][..])), Err(RegisterError::PartialAccess));
+        assert_eq!(read_all(&map), ALL);
+    }
+
+    #[test]
+    fn write_across_registers_not_atomic_001() {
+        let mut map = map();
+
+        // `value` is written before `end` rejects the write
+        assert_eq!(map.write(4, Registers::from(&[0xAABB, 0xCCDD, 9][..])), Err(RegisterError::AccessDenied));
+        assert_eq!(read_all(&map), [0x5375, 0x6E53, 1, 2, 0xAABB, 0xCCDD, 0xFFFF, 0x0000]);
+    }
+
+    #[test]
+    fn write_out_of_bounds_001() {
+        let mut map = map();
+
+        assert_eq!(map.write(8, Registers::from(&[9][..])), Err(RegisterError::OutOfBounds { offset: 8 }));
+
+        // `end` is read-only and reached before the end of the map
+        assert_eq!(map.write(7, Registers::from(&[9, 9][..])), Err(RegisterError::AccessDenied));
+        assert_eq!(read_all(&map), ALL);
+    }
+
+    #[test]
+    fn write_empty_values_001() {
+        let mut map = map();
+
+        assert_eq!(map.write(3, Registers::from(&[][..])), Ok(()));
+        assert_eq!(map.write(8, Registers::from(&[][..])), Ok(()));
+        assert_eq!(map.write(9, Registers::from(&[][..])), Err(RegisterError::OutOfBounds { offset: 9 }));
+        assert_eq!(read_all(&map), ALL);
+    }
+
+    #[test]
+    fn write_at_start_address_001() {
+        let mut map = At::new(40000, map());
+
+        assert_eq!(map.write(40004, Registers::from(&[0xAABB, 0xCCDD][..])), Ok(()));
+        assert_eq!(u32::from(map.get().model.value.get()), 0xAABBCCDD);
+
+        assert_eq!(map.write(39999, Registers::from(&[9][..])), Err(RegisterError::OutOfBounds { offset: 39999 }));
     }
 }
