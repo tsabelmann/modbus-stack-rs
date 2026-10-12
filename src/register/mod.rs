@@ -49,6 +49,11 @@ pub use reg_u16_array::RegU16Array;
 mod at;
 pub use at::At;
 
+// Composition
+
+mod cursor;
+pub use cursor::ReadCursor;
+
 /// Trait for turning a reference into a immutable register iterator.
 pub trait IntoRegIter<'a> {
     type IntoIter: Iterator<Item = &'a u16>;
