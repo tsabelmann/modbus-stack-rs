@@ -9,6 +9,7 @@ use std::net::{TcpListener, TcpStream};
 use modbus_stack::{encode_exception, read_holding_registers, write_single_register, DecodeError};
 use modbus_stack::tcp::{Frame, FrameParser};
 use modbus_stack::{ExceptionCode, FunctionCode, FunctionKind};
+use modbus_stack::register::ReadRegisterData;
 
 const REGISTER_COUNT: usize = 100;
 
@@ -69,15 +70,17 @@ fn serve(mut stream: TcpStream, registers: &mut [u16; REGISTER_COUNT]) -> std::i
 
 /// Answers the request in place.
 fn handle(frame: &mut Frame, registers: &mut [u16; REGISTER_COUNT]) {
+    let mut buffer = [0u16; read_holding_registers::Request::MAX_QUANTITY_OF_REGISTERS as usize];
+
     match frame.function_code() {
         FunctionKind::Normal(FunctionCode::ReadHoldingRegisters) => {
             let response = match read_holding_registers::Request::decode(frame) {
                 Ok(request) => {
                     let start = request.starting_address() as usize;
-                    let end = start + request.quantity_of_registers() as usize;
-                    match registers.get(start..end) {
-                        Some(values) => read_holding_registers::Response::new(values),
-                        None => read_holding_registers::Response::new_exception(ExceptionCode::IllegalDataAddress),
+                    let values = &mut buffer[..request.quantity_of_registers() as usize];
+                    match registers.as_slice().read(start, values) {
+                        Ok(()) => read_holding_registers::Response::new(values),
+                        Err(err) => read_holding_registers::Response::new_exception(err.into()),
                     }
                 }
                 Err(DecodeError::Malformed(err)) => read_holding_registers::Response::new_exception(err.into()),
