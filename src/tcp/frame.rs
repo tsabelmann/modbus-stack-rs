@@ -143,7 +143,7 @@ impl FrameEncoder for Frame {
 mod frame_tests {
     use super::*;
     use crate::FunctionCode;
-    use crate::encode::response::write_single_register::Response;
+    use crate::write_single_register::Response;
 
     // Write single register request: address 0x0001, value 0x0003
     const REQUEST: [u8; 12] = [
