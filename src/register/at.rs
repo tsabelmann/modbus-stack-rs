@@ -1,4 +1,7 @@
-use core::ops::{Deref, DerefMut};
+use core::{
+    fmt::Debug,
+    ops::{Deref, DerefMut},
+};
 
 use super::{ReadRegisterData, RegisterData, RegisterError, RegisterResult, WriteRegisterData};
 use crate::Registers;
@@ -17,7 +20,6 @@ use crate::Registers;
 /// reg.read(40000, &mut buf).unwrap();
 /// assert_eq!(buf, [0x1122, 0x3344]);
 /// ```
-#[derive(Debug, Clone, PartialEq)]
 pub struct At<T> {
     start: usize,
     inner: T,
@@ -70,6 +72,32 @@ impl<T> Deref for At<T> {
 
     fn deref(&self) -> &Self::Target {
         &self.inner
+    }
+}
+
+impl<T: PartialEq> PartialEq for At<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.start == other.start && self.inner == other.inner
+    }
+}
+
+impl<T: Eq> Eq for At<T> {}
+
+impl<T: Clone> Clone for At<T> {
+    fn clone(&self) -> Self {
+        Self {
+            start: self.start.clone(),
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+impl<T: Debug> Debug for At<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("At")
+            .field("start", &self.start)
+            .field("inner", &self.inner)
+            .finish()
     }
 }
 

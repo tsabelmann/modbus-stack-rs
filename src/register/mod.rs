@@ -1,7 +1,10 @@
 // pub mod atomic;
 
 use crate::{ExceptionCode, Registers};
-use core::ops::{Deref, DerefMut};
+use core::{
+    fmt::Debug,
+    ops::{Deref, DerefMut},
+};
 
 mod reg_bool;
 pub use reg_bool::RegBool;
@@ -204,7 +207,6 @@ impl WriteRegisterData for &mut [u16] {
 }
 
 /// Read-only register enforced by the type system.
-#[derive(Debug)]
 pub struct RO<T> {
     inner: T,
 }
@@ -241,6 +243,32 @@ impl<T> Deref for RO<T> {
     }
 }
 
+impl<T: Default> Default for RO<T> {
+    fn default() -> Self {
+        RO::new(T::default())
+    }
+}
+
+impl<T: PartialEq> PartialEq for RO<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner == other.inner
+    }
+}
+
+impl<T: Eq> Eq for RO<T> {}
+
+impl<T: Clone> Clone for RO<T> {
+    fn clone(&self) -> Self {
+        RO::new(self.inner.clone())
+    }
+}
+
+impl<T: Debug> Debug for RO<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("RO").field("inner", &self.inner).finish()
+    }
+}
+
 impl<'a, T> IntoIterator for &'a RO<T>
 where
     &'a T: IntoRegIter<'a>,
@@ -249,18 +277,6 @@ where
     type IntoIter = <&'a T as IntoRegIter<'a>>::IntoIter;
     fn into_iter(self) -> Self::IntoIter {
         (&self.inner).into_reg_iter()
-    }
-}
-
-impl<T: Clone> Clone for RO<T> {
-    fn clone(&self) -> Self {
-        RO::new(self.inner.clone())
-    }
-}
-
-impl<T: Default> Default for RO<T> {
-    fn default() -> Self {
-        RO::new(T::default())
     }
 }
 
@@ -287,7 +303,6 @@ impl<T: RegisterData> WriteRegisterData for RO<T> {
 }
 
 /// Read and writable register.
-#[derive(Debug)]
 pub struct RW<T> {
     inner: T,
 }
@@ -324,6 +339,32 @@ impl<T> Deref for RW<T> {
     }
 }
 
+impl<T: Default> Default for RW<T> {
+    fn default() -> Self {
+        RW::new(T::default())
+    }
+}
+
+impl<T: PartialEq> PartialEq for RW<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner == other.inner
+    }
+}
+
+impl<T: Eq> Eq for RW<T> {}
+
+impl<T: Clone> Clone for RW<T> {
+    fn clone(&self) -> Self {
+        RW::new(self.inner.clone())
+    }
+}
+
+impl<T: Debug> Debug for RW<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("RW").field("inner", &self.inner).finish()
+    }
+}
+
 impl<'a, T> IntoIterator for &'a RW<T>
 where
     &'a T: IntoRegIter<'a>,
@@ -343,18 +384,6 @@ where
     type IntoIter = <&'a mut T as IntoRegIterMut<'a>>::IntoIter;
     fn into_iter(self) -> Self::IntoIter {
         (&mut self.inner).into_reg_iter_mut()
-    }
-}
-
-impl<T: Clone> Clone for RW<T> {
-    fn clone(&self) -> Self {
-        RW::new(self.inner.clone())
-    }
-}
-
-impl<T: Default> Default for RW<T> {
-    fn default() -> Self {
-        RW::new(T::default())
     }
 }
 
