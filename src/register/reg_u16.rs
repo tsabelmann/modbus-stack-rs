@@ -1,27 +1,39 @@
 use super::{IntoRegIter, IntoRegIterMut};
-use super::{RegisterData, ReadRegisterData, WriteRegisterData, RegisterResult, read_words, write_words};
+use super::{
+    ReadRegisterData, RegisterData, RegisterResult, WriteRegisterData, read_words, write_words,
+};
 use crate::Registers;
 
 /// Modbus register that can be converter to and from [u16].
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct RegU16 {
-    data: [u16; 1]
+    data: [u16; 1],
 }
 
 impl RegU16 {
     /// Creates a new [u16] based modbus register.
-    /// 
+    ///
     /// # Example
     ///
     /// ```
     /// use modbus_stack::register::RegU16;
-    /// 
+    ///
     /// let reg = RegU16::new(42);
     /// ````
     pub const fn new(value: u16) -> RegU16 {
-        RegU16 {
-            data: [value]
-        }
+        RegU16 { data: [value] }
+    }
+}
+
+impl AsMut<[u16]> for RegU16 {
+    fn as_mut(&mut self) -> &mut [u16] {
+        &mut self.data
+    }
+}
+
+impl AsRef<[u16]> for RegU16 {
+    fn as_ref(&self) -> &[u16] {
+        &self.data
     }
 }
 
@@ -115,8 +127,8 @@ impl WriteRegisterData for RegU16 {
 
 #[cfg(test)]
 mod reg_u16_tests {
-    use crate::register::{IntoRegIter, IntoRegIterMut};
     use super::*;
+    use crate::register::{IntoRegIter, IntoRegIterMut};
 
     #[test]
     fn reg_iter_001() {
@@ -162,7 +174,7 @@ mod reg_u16_tests {
         let iter1 = reg1.into_reg_iter_mut();
         let iter2 = reg2.into_reg_iter_mut();
         let iter3 = reg3.into_reg_iter_mut();
-        
+
         let mut iter = iter0.chain(iter1).chain(iter2).chain(iter3);
         if let Some(reff) = iter.next() {
             *reff = 42;
@@ -185,7 +197,7 @@ mod reg_u16_tests {
         let iter1 = reg1.into_reg_iter();
         let iter2 = reg2.into_reg_iter();
         let iter3 = reg3.into_reg_iter();
-        
+
         let mut iter = iter0.chain(iter1).chain(iter2).chain(iter3);
         assert_eq!(Some(&42), iter.next());
         assert_eq!(Some(&1337), iter.next());
@@ -207,5 +219,4 @@ mod reg_u16_tests {
         let value = u16::from(reg);
         assert_eq!(value, 0x1234);
     }
-
 }
