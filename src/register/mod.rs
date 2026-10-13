@@ -1,6 +1,7 @@
 // pub mod atomic;
 
 use crate::{ExceptionCode, Registers};
+use core::ops::{Deref, DerefMut};
 
 mod reg_bool;
 pub use reg_bool::RegBool;
@@ -122,7 +123,7 @@ impl RegisterData for &[u16] {
 }
 
 /// Copies `buf.len()` registers starting at `offset` from `data` into `buf`.
-pub(crate) fn read_words(data: &[u16], offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
+pub fn read_words(data: &[u16], offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
     let src = offset
         .checked_add(buf.len())
         .and_then(|end| data.get(offset..end))
@@ -132,7 +133,7 @@ pub(crate) fn read_words(data: &[u16], offset: usize, buf: &mut [u16]) -> Regist
 }
 
 /// Like [read_words], but only the whole `data` can be read at once.
-pub(crate) fn read_whole(data: &[u16], offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
+pub fn read_whole(data: &[u16], offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
     if offset >= data.len() || buf.len() > data.len() - offset {
         return Err(RegisterError::OutOfBounds { offset });
     }
@@ -143,16 +144,12 @@ pub(crate) fn read_whole(data: &[u16], offset: usize, buf: &mut [u16]) -> Regist
 }
 
 /// Copies all `values` into `data` starting at `offset`.
-pub(crate) fn write_words(
-    data: &mut [u16],
-    offset: usize,
-    values: Registers<'_>,
-) -> RegisterResult<()> {
+pub fn write_words(data: &mut [u16], offset: usize, values: Registers<'_>) -> RegisterResult<()> {
     write_words_with(data, offset, values, |_| true)
 }
 
 /// Like [write_words], but fails with [RegisterError::InvalidValue] if any value is not valid.
-pub(crate) fn write_words_with(
+pub fn write_words_with(
     data: &mut [u16],
     offset: usize,
     values: Registers<'_>,
@@ -172,11 +169,7 @@ pub(crate) fn write_words_with(
 }
 
 /// Like [write_words], but only the whole `data` can be written at once.
-pub(crate) fn write_whole(
-    data: &mut [u16],
-    offset: usize,
-    values: Registers<'_>,
-) -> RegisterResult<()> {
+pub fn write_whole(data: &mut [u16], offset: usize, values: Registers<'_>) -> RegisterResult<()> {
     if offset >= data.len() || values.len() > data.len() - offset {
         return Err(RegisterError::OutOfBounds { offset });
     }
@@ -213,24 +206,38 @@ impl WriteRegisterData for &mut [u16] {
 /// Read-only register enforced by the type system.
 #[derive(Debug)]
 pub struct RO<T> {
-    data: T,
+    inner: T,
 }
 
 impl<T> RO<T> {
     pub const fn new(value: T) -> RO<T> {
-        RO { data: value }
+        RO { inner: value }
     }
 
     /// Returns a reference to the wrapped register.
     pub const fn get(&self) -> &T {
-        &self.data
+        &self.inner
     }
 
     pub fn modify<F, U>(&mut self, f: F) -> U
     where
         F: FnOnce(&mut T) -> U,
     {
-        f(&mut self.data)
+        f(&mut self.inner)
+    }
+}
+
+impl<T> DerefMut for RO<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+impl<T> Deref for RO<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
     }
 }
 
@@ -241,13 +248,13 @@ where
     type Item = &'a u16;
     type IntoIter = <&'a T as IntoRegIter<'a>>::IntoIter;
     fn into_iter(self) -> Self::IntoIter {
-        (&self.data).into_reg_iter()
+        (&self.inner).into_reg_iter()
     }
 }
 
 impl<T: Clone> Clone for RO<T> {
     fn clone(&self) -> Self {
-        RO::new(self.data.clone())
+        RO::new(self.inner.clone())
     }
 }
 
@@ -259,13 +266,13 @@ impl<T: Default> Default for RO<T> {
 
 impl<T: RegisterData> RegisterData for RO<T> {
     fn register_span(&self) -> usize {
-        self.data.register_span()
+        self.inner.register_span()
     }
 }
 
 impl<T: ReadRegisterData> ReadRegisterData for RO<T> {
     fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
-        self.data.read(offset, buf)
+        self.inner.read(offset, buf)
     }
 }
 
@@ -282,24 +289,38 @@ impl<T: RegisterData> WriteRegisterData for RO<T> {
 /// Read and writable register.
 #[derive(Debug)]
 pub struct RW<T> {
-    data: T,
+    inner: T,
 }
 
 impl<T> RW<T> {
     pub const fn new(value: T) -> RW<T> {
-        RW { data: value }
+        RW { inner: value }
     }
 
     /// Returns a reference to the wrapped register.
     pub const fn get(&self) -> &T {
-        &self.data
+        &self.inner
     }
 
     pub fn modify<F, U>(&mut self, f: F) -> U
     where
         F: FnOnce(&mut T) -> U,
     {
-        f(&mut self.data)
+        f(&mut self.inner)
+    }
+}
+
+impl<T> DerefMut for RW<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+impl<T> Deref for RW<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
     }
 }
 
@@ -310,7 +331,7 @@ where
     type Item = &'a u16;
     type IntoIter = <&'a T as IntoRegIter<'a>>::IntoIter;
     fn into_iter(self) -> Self::IntoIter {
-        (&self.data).into_reg_iter()
+        (&self.inner).into_reg_iter()
     }
 }
 
@@ -321,13 +342,13 @@ where
     type Item = &'a mut u16;
     type IntoIter = <&'a mut T as IntoRegIterMut<'a>>::IntoIter;
     fn into_iter(self) -> Self::IntoIter {
-        (&mut self.data).into_reg_iter_mut()
+        (&mut self.inner).into_reg_iter_mut()
     }
 }
 
 impl<T: Clone> Clone for RW<T> {
     fn clone(&self) -> Self {
-        RW::new(self.data.clone())
+        RW::new(self.inner.clone())
     }
 }
 
@@ -339,19 +360,19 @@ impl<T: Default> Default for RW<T> {
 
 impl<T: RegisterData> RegisterData for RW<T> {
     fn register_span(&self) -> usize {
-        self.data.register_span()
+        self.inner.register_span()
     }
 }
 
 impl<T: ReadRegisterData> ReadRegisterData for RW<T> {
     fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
-        self.data.read(offset, buf)
+        self.inner.read(offset, buf)
     }
 }
 
 impl<T: WriteRegisterData> WriteRegisterData for RW<T> {
     fn write(&mut self, offset: usize, values: Registers<'_>) -> RegisterResult<()> {
-        self.data.write(offset, values)
+        self.inner.write(offset, values)
     }
 }
 

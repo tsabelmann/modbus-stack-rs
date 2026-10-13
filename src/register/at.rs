@@ -1,3 +1,5 @@
+use core::ops::{Deref, DerefMut};
+
 use super::{ReadRegisterData, RegisterData, RegisterError, RegisterResult, WriteRegisterData};
 use crate::Registers;
 
@@ -57,6 +59,20 @@ impl<T> At<T> {
     }
 }
 
+impl<T> DerefMut for At<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+impl<T> Deref for At<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
 impl<T: RegisterData> RegisterData for At<T> {
     /// `start` plus the span of the wrapped register; `[0, start)` is an inaccessible hole.
     fn register_span(&self) -> usize {
@@ -95,13 +111,22 @@ mod at_tests {
         assert_eq!(buf, [3, 4]);
 
         let mut buf = [0u16; 1];
-        assert_eq!(reg.read(99, &mut buf), Err(RegisterError::OutOfBounds { offset: 99 }));
+        assert_eq!(
+            reg.read(99, &mut buf),
+            Err(RegisterError::OutOfBounds { offset: 99 })
+        );
 
         let mut buf = [0u16; 4];
-        assert_eq!(reg.read(98, &mut buf), Err(RegisterError::OutOfBounds { offset: 98 }));
+        assert_eq!(
+            reg.read(98, &mut buf),
+            Err(RegisterError::OutOfBounds { offset: 98 })
+        );
 
         let mut buf = [0u16; 2];
-        assert_eq!(reg.read(103, &mut buf), Err(RegisterError::OutOfBounds { offset: 3 }));
+        assert_eq!(
+            reg.read(103, &mut buf),
+            Err(RegisterError::OutOfBounds { offset: 3 })
+        );
     }
 
     #[test]
