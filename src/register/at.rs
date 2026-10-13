@@ -92,6 +92,8 @@ impl<T: Clone> Clone for At<T> {
     }
 }
 
+impl<T: Copy> Copy for At<T> {}
+
 impl<T: Debug> Debug for At<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("At")

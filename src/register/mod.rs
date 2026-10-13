@@ -263,6 +263,8 @@ impl<T: Clone> Clone for RO<T> {
     }
 }
 
+impl<T: Copy> Copy for RO<T> {}
+
 impl<T: Debug> Debug for RO<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("RO").field("inner", &self.inner).finish()
@@ -358,6 +360,8 @@ impl<T: Clone> Clone for RW<T> {
         RW::new(self.inner.clone())
     }
 }
+
+impl<T: Copy> Copy for RW<T> {}
 
 impl<T: Debug> Debug for RW<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
