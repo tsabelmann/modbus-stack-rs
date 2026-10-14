@@ -118,6 +118,7 @@ impl<'a> Registers<'a> {
     }
 
     /// Writes the register values into `dest` and returns the number of written values.
+    #[inline]
     pub fn write_to(&self, dest: &mut [u16]) -> usize {
         let mut count = 0;
         for (dest, value) in dest.iter_mut().zip(self.clone()) {
@@ -128,6 +129,7 @@ impl<'a> Registers<'a> {
     }
 
     /// Splits after `n` register values; `n` is clamped to the number of values.
+    #[inline]
     pub(crate) fn split_at(self, n: usize) -> (Registers<'a>, Registers<'a>) {
         let (head, tail) = match self.source {
             Source::Bytes(data) => {
@@ -144,6 +146,7 @@ impl<'a> Registers<'a> {
 }
 
 impl<'a> From<&'a [u16]> for Registers<'a> {
+    #[inline]
     fn from(values: &'a [u16]) -> Self {
         Registers {
             source: Source::Values(values),
@@ -163,6 +166,7 @@ impl<'a> Eq for Registers<'a> {}
 impl<'a> Iterator for Registers<'a> {
     type Item = u16;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         match &mut self.source {
             Source::Bytes(data) => {
@@ -178,6 +182,7 @@ impl<'a> Iterator for Registers<'a> {
         }
     }
 
+    #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         let remaining = match &self.source {
             Source::Bytes(data) => data.len() / 2,
