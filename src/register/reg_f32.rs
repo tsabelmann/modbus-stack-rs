@@ -1,4 +1,3 @@
-use super::{IntoRegIter, IntoRegIterMut};
 use super::{RegisterData, ReadRegisterData, WriteRegisterData, RegisterResult, read_whole, write_whole};
 use crate::Registers;
 
@@ -60,44 +59,6 @@ impl From<&RegF32> for f32 {
     }
 }
 
-impl IntoIterator for RegF32 {
-    type Item = u16;
-    type IntoIter = core::array::IntoIter<u16, 2>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.data.into_iter()
-    }
-}
-
-impl<'a> IntoIterator for &'a RegF32 {
-    type Item = &'a u16;
-    type IntoIter = core::slice::Iter<'a, u16>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.data.iter()
-    }
-}
-
-impl<'a> IntoIterator for &'a mut RegF32 {
-    type Item = &'a mut u16;
-    type IntoIter = core::slice::IterMut<'a, u16>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.data.iter_mut()
-    }
-}
-
-impl<'a> IntoRegIter<'a> for &'a RegF32 {
-    type IntoIter = <&'a RegF32 as IntoIterator>::IntoIter;
-    fn into_reg_iter(self) -> Self::IntoIter {
-        self.into_iter()
-    }
-}
-
-impl<'a> IntoRegIterMut<'a> for &'a mut RegF32 {
-    type IntoIter = <&'a mut RegF32 as IntoIterator>::IntoIter;
-    fn into_reg_iter_mut(self) -> Self::IntoIter {
-        self.into_iter()
-    }
-}
-
 /* RegisterData */
 
 impl RegisterData for RegF32 {
@@ -127,48 +88,29 @@ impl WriteRegisterData for RegF32 {
 
 #[cfg(test)]
 mod reg_f32_tests {
-    use crate::register::{IntoRegIter, IntoRegIterMut};
     use super::*;
 
-    #[test]
-    fn reg_iter_001() {
-        let reg0 = RegF32::new(0.0);
-        let mut iter = reg0.into_reg_iter();
-        assert_eq!(Some(&0x0000), iter.next());
-        assert_eq!(Some(&0x0000), iter.next());
-        assert_eq!(None, iter.next());
+    /// Big endian register representation of `value`.
+    fn words(value: f32) -> [u16; 2] {
+        let bytes = value.to_be_bytes();
+        core::array::from_fn(|i| u16::from_be_bytes([bytes[2 * i], bytes[2 * i + 1]]))
     }
 
     #[test]
-    fn reg_iter_mut_001() {
-        let mut reg0 = RegF32::new(0.0);
-
-        // check values equal initialization
-        let mut iter = reg0.into_reg_iter();
-        assert_eq!(Some(&0x0000), iter.next());
-        assert_eq!(Some(&0x0000), iter.next());
-
-        let data = {
-            let data = 42.0f32.to_be_bytes();
-            [
-                ((data[0] as u16) << 8) | (data[1] as u16),
-                ((data[2] as u16) << 8) | (data[3] as u16),
-            ]
-        };
-
-        // change values
-        let mut iter = reg0.into_reg_iter_mut();
-        if let Some(reff) = iter.next() {
-            *reff = data[0];
+    fn read_001() {
+        for value in [0.0, 42.0, -1.5] {
+            let reg = RegF32::new(value);
+            let mut buf = [0u16; 2];
+            assert_eq!(reg.read(0, &mut buf), Ok(()));
+            assert_eq!(buf, words(value));
         }
+    }
 
-        if let Some(reff) = iter.next() {
-            *reff = data[1];
-        }
-
-        // check for change
-        let value = f32::from(reg0);
-        assert_eq!(value, 42.0f32);
+    #[test]
+    fn write_001() {
+        let mut reg = RegF32::new(0.0);
+        assert_eq!(reg.write(0, Registers::from(&words(42.0)[..])), Ok(()));
+        assert_eq!(f32::from(&reg), 42.0);
     }
 
     #[test]

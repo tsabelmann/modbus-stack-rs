@@ -61,18 +61,6 @@ pub use cursor::{ReadCursor, WriteCursor};
 mod reserved;
 pub use reserved::Reserved;
 
-/// Trait for turning a reference into a immutable register iterator.
-pub trait IntoRegIter<'a> {
-    type IntoIter: Iterator<Item = &'a u16>;
-    fn into_reg_iter(self) -> Self::IntoIter;
-}
-
-/// Trait for turning a reference into a mutable register iterator.
-pub trait IntoRegIterMut<'a> {
-    type IntoIter: Iterator<Item = &'a mut u16>;
-    fn into_reg_iter_mut(self) -> Self::IntoIter;
-}
-
 /// Mögliche Fehler bei Register-Operationen
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -281,17 +269,6 @@ impl<T: Debug> Debug for RO<T> {
     }
 }
 
-impl<'a, T> IntoIterator for &'a RO<T>
-where
-    &'a T: IntoRegIter<'a>,
-{
-    type Item = &'a u16;
-    type IntoIter = <&'a T as IntoRegIter<'a>>::IntoIter;
-    fn into_iter(self) -> Self::IntoIter {
-        (&self.inner).into_reg_iter()
-    }
-}
-
 impl<T: RegisterData> RegisterData for RO<T> {
     fn register_span(&self) -> usize {
         self.inner.register_span()
@@ -379,28 +356,6 @@ impl<T: Debug> Debug for RW<T> {
     }
 }
 
-impl<'a, T> IntoIterator for &'a RW<T>
-where
-    &'a T: IntoRegIter<'a>,
-{
-    type Item = &'a u16;
-    type IntoIter = <&'a T as IntoRegIter<'a>>::IntoIter;
-    fn into_iter(self) -> Self::IntoIter {
-        (&self.inner).into_reg_iter()
-    }
-}
-
-impl<'a, T> IntoIterator for &'a mut RW<T>
-where
-    &'a mut T: IntoRegIterMut<'a>,
-{
-    type Item = &'a mut u16;
-    type IntoIter = <&'a mut T as IntoRegIterMut<'a>>::IntoIter;
-    fn into_iter(self) -> Self::IntoIter {
-        (&mut self.inner).into_reg_iter_mut()
-    }
-}
-
 impl<T: RegisterData> RegisterData for RW<T> {
     fn register_span(&self) -> usize {
         self.inner.register_span()
@@ -425,102 +380,25 @@ mod register_tests {
     use core::mem::size_of;
 
     #[test]
-    fn reg_iter_001() {
+    fn read_cursor_001() {
         let reg0 = RegBool::new(true);
         let reg1 = RegU8::new(0x12);
         let reg2 = RegU16::new(0xADAC);
         let reg3 = RegU32::new(0x11223344);
         let reg4 = RegU64::new(0x0123456789ABCDEF);
 
-        let iter0 = reg0.into_reg_iter();
-        let iter1 = reg1.into_reg_iter();
-        let iter2 = reg2.into_reg_iter();
-        let iter3 = reg3.into_reg_iter();
-        let iter4 = reg4.into_reg_iter();
-
-        let mut iter = iter0.chain(iter1).chain(iter2).chain(iter3).chain(iter4);
-        assert_eq!(Some(&0xFFFF), iter.next());
-        assert_eq!(Some(&0x0012), iter.next());
-        assert_eq!(Some(&0xADAC), iter.next());
-        assert_eq!(Some(&0x1122), iter.next());
-        assert_eq!(Some(&0x3344), iter.next());
-        assert_eq!(Some(&0x0123), iter.next());
-        assert_eq!(Some(&0x4567), iter.next());
-        assert_eq!(Some(&0x89AB), iter.next());
-        assert_eq!(Some(&0xCDEF), iter.next());
-        assert_eq!(None, iter.next());
-    }
-
-    #[test]
-    fn reg_iter_ro_register_001() {
-        let reg0 = RegBool::new(true);
-        let reg0 = RO::new(reg0);
-
-        let reg1 = RegU8::new(0x12);
-        let reg1 = RO::new(reg1);
-
-        let reg2 = RegU16::new(0xADAC);
-        let reg2 = RO::new(reg2);
-
-        let reg3 = RegU32::new(0x11223344);
-        let reg3 = RO::new(reg3);
-
-        let reg4 = RegU64::new(0x0123456789ABCDEF);
-        let reg4 = RO::new(reg4);
-
-        let iter0 = reg0.into_iter();
-        let iter1 = reg1.into_iter();
-        let iter2 = reg2.into_iter();
-        let iter3 = reg3.into_iter();
-        let iter4 = reg4.into_iter();
-
-        let mut iter = iter0.chain(iter1).chain(iter2).chain(iter3).chain(iter4);
-        assert_eq!(Some(&0xFFFF), iter.next());
-        assert_eq!(Some(&0x0012), iter.next());
-        assert_eq!(Some(&0xADAC), iter.next());
-        assert_eq!(Some(&0x1122), iter.next());
-        assert_eq!(Some(&0x3344), iter.next());
-        assert_eq!(Some(&0x0123), iter.next());
-        assert_eq!(Some(&0x4567), iter.next());
-        assert_eq!(Some(&0x89AB), iter.next());
-        assert_eq!(Some(&0xCDEF), iter.next());
-        assert_eq!(None, iter.next());
-    }
-
-    #[test]
-    fn reg_iter_rw_register_001() {
-        let reg0 = RegBool::new(true);
-        let reg0 = RW::new(reg0);
-
-        let reg1 = RegU8::new(0x12);
-        let reg1 = RW::new(reg1);
-
-        let reg2 = RegU16::new(0xADAC);
-        let reg2 = RW::new(reg2);
-
-        let reg3 = RegU32::new(0x11223344);
-        let reg3 = RW::new(reg3);
-
-        let reg4 = RegU64::new(0x0123456789ABCDEF);
-        let reg4 = RW::new(reg4);
-
-        let iter0 = reg0.into_iter();
-        let iter1 = reg1.into_iter();
-        let iter2 = reg2.into_iter();
-        let iter3 = reg3.into_iter();
-        let iter4 = reg4.into_iter();
-
-        let mut iter = iter0.chain(iter1).chain(iter2).chain(iter3).chain(iter4);
-        assert_eq!(Some(&0xFFFF), iter.next());
-        assert_eq!(Some(&0x0012), iter.next());
-        assert_eq!(Some(&0xADAC), iter.next());
-        assert_eq!(Some(&0x1122), iter.next());
-        assert_eq!(Some(&0x3344), iter.next());
-        assert_eq!(Some(&0x0123), iter.next());
-        assert_eq!(Some(&0x4567), iter.next());
-        assert_eq!(Some(&0x89AB), iter.next());
-        assert_eq!(Some(&0xCDEF), iter.next());
-        assert_eq!(None, iter.next());
+        let mut buf = [0u16; 9];
+        let mut cursor = ReadCursor::new(0, &mut buf);
+        cursor.visit(&reg0).unwrap();
+        cursor.visit(&reg1).unwrap();
+        cursor.visit(&reg2).unwrap();
+        cursor.visit(&reg3).unwrap();
+        cursor.visit(&reg4).unwrap();
+        assert_eq!(cursor.finish(), Ok(()));
+        assert_eq!(
+            buf,
+            [0xFFFF, 0x0012, 0xADAC, 0x1122, 0x3344, 0x0123, 0x4567, 0x89AB, 0xCDEF]
+        );
     }
 
     #[test]

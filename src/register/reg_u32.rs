@@ -1,4 +1,3 @@
-use super::{IntoRegIter, IntoRegIterMut};
 use super::{RegisterData, ReadRegisterData, WriteRegisterData, RegisterResult, read_whole, write_whole};
 use crate::Registers;
 
@@ -49,44 +48,6 @@ impl From<&RegU32> for u32 {
     }
 }
 
-impl IntoIterator for RegU32 {
-    type Item = u16;
-    type IntoIter = core::array::IntoIter<u16, 2>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.data.into_iter()
-    }
-}
-
-impl<'a> IntoIterator for &'a RegU32 {
-    type Item = &'a u16;
-    type IntoIter = core::slice::Iter<'a, u16>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.data.iter()
-    }
-}
-
-impl<'a> IntoIterator for &'a mut RegU32 {
-    type Item = &'a mut u16;
-    type IntoIter = core::slice::IterMut<'a, u16>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.data.iter_mut()
-    }
-}
-
-impl<'a> IntoRegIter<'a> for &'a RegU32 {
-    type IntoIter = <&'a RegU32 as IntoIterator>::IntoIter;
-    fn into_reg_iter(self) -> Self::IntoIter {
-        self.into_iter()
-    }
-}
-
-impl<'a> IntoRegIterMut<'a> for &'a mut RegU32 {
-    type IntoIter = <&'a mut RegU32 as IntoIterator>::IntoIter;
-    fn into_reg_iter_mut(self) -> Self::IntoIter {
-        self.into_iter()
-    }
-}
-
 /* RegisterData */
 
 impl RegisterData for RegU32 {
@@ -116,104 +77,30 @@ impl WriteRegisterData for RegU32 {
 
 #[cfg(test)]
 mod reg_u32_tests {
-    use crate::register::{IntoRegIter, IntoRegIterMut};
     use super::*;
 
     #[test]
-    fn reg_iter_001() {
-        let reg0 = RegU32::new(0x11223344);
-        let reg1 = RegU32::new(0xAABBCCDD);
-
-        let iter0 = reg0.into_reg_iter();
-        let iter1 = reg1.into_reg_iter();
-
-        let mut iter = iter0.chain(iter1);
-        assert_eq!(Some(&0x1122), iter.next());
-        assert_eq!(Some(&0x3344), iter.next());
-        assert_eq!(Some(&0xAABB), iter.next());
-        assert_eq!(Some(&0xCCDD), iter.next());
-        assert_eq!(None, iter.next());
+    fn read_001() {
+        let regs = [RegU32::new(0x11223344), RegU32::new(0xAABBCCDD)];
+        let expected = [[0x1122, 0x3344], [0xAABB, 0xCCDD]];
+        for (reg, expected) in regs.iter().zip(expected) {
+            let mut buf = [0u16; 2];
+            assert_eq!(reg.read(0, &mut buf), Ok(()));
+            assert_eq!(buf, expected);
+        }
     }
 
     #[test]
-    fn reg_iter_mut_001() {
-        let mut reg0 = RegU32::new(0x11223344);
-        let mut reg1 = RegU32::new(0x55667788);
-        let mut reg2 = RegU32::new(0x99AABBCC);
-        let mut reg3 = RegU32::new(0xDDEEFF00);
-
-        let iter0 = reg0.into_reg_iter();
-        let iter1 = reg1.into_reg_iter();
-        let iter2 = reg2.into_reg_iter();
-        let iter3 = reg3.into_reg_iter();
-
-        // check values equal initialization
-        let mut iter = iter0.chain(iter1).chain(iter2).chain(iter3);
-        assert_eq!(Some(&0x1122), iter.next());
-        assert_eq!(Some(&0x3344), iter.next());
-        assert_eq!(Some(&0x5566), iter.next());
-        assert_eq!(Some(&0x7788), iter.next());
-        assert_eq!(Some(&0x99AA), iter.next());
-        assert_eq!(Some(&0xBBCC), iter.next());
-        assert_eq!(Some(&0xDDEE), iter.next());
-        assert_eq!(Some(&0xFF00), iter.next());
-        assert_eq!(None, iter.next());
-
-        // Change values
-        let iter0 = reg0.into_reg_iter_mut();
-        let iter1 = reg1.into_reg_iter_mut();
-        let iter2 = reg2.into_reg_iter_mut();
-        let iter3 = reg3.into_reg_iter_mut();
-        
-        let mut iter = iter0.chain(iter1).chain(iter2).chain(iter3);
-        if let Some(reff) = iter.next() {
-            *reff = 0x00FF;
+    fn write_001() {
+        let cases = [
+            ([0x00FF, 0xEEDD], 0x00FF_EEDD),
+            ([0x8877, 0x6655], 0x8877_6655),
+        ];
+        for (words, expected) in cases {
+            let mut reg = RegU32::new(0x11223344);
+            assert_eq!(reg.write(0, Registers::from(&words[..])), Ok(()));
+            assert_eq!(u32::from(&reg), expected);
         }
-
-        if let Some(reff) = iter.next() {
-            *reff = 0xEEDD;
-        }
-
-        if let Some(reff) = iter.next() {
-            *reff = 0xCCBB;
-        }
-
-        if let Some(reff) = iter.next() {
-            *reff = 0xAA99;
-        }
-
-        if let Some(reff) = iter.next() {
-            *reff = 0x8877;
-        }
-
-        if let Some(reff) = iter.next() {
-            *reff = 0x6655;
-        }
-
-        if let Some(reff) = iter.next() {
-            *reff = 0x4433;
-        }
-
-        if let Some(reff) = iter.next() {
-            *reff = 0x2211;
-        }
-
-        // check for change
-        let iter0 = reg0.into_reg_iter();
-        let iter1 = reg1.into_reg_iter();
-        let iter2 = reg2.into_reg_iter();
-        let iter3 = reg3.into_reg_iter();
-        
-        let mut iter = iter0.chain(iter1).chain(iter2).chain(iter3);
-        assert_eq!(Some(&0x00FF), iter.next());
-        assert_eq!(Some(&0xEEDD), iter.next());
-        assert_eq!(Some(&0xCCBB), iter.next());
-        assert_eq!(Some(&0xAA99), iter.next());
-        assert_eq!(Some(&0x8877), iter.next());
-        assert_eq!(Some(&0x6655), iter.next());
-        assert_eq!(Some(&0x4433), iter.next());
-        assert_eq!(Some(&0x2211), iter.next());
-        assert_eq!(None, iter.next());
     }
 
     #[test]

@@ -1,4 +1,3 @@
-use super::{IntoRegIter, IntoRegIterMut};
 use super::{
     ReadRegisterData, RegisterData, RegisterResult, WriteRegisterData, read_words, write_words,
 };
@@ -102,12 +101,6 @@ impl<const N: usize> From<&RegU16Array<N>> for [u16; N] {
     }
 }
 
-impl<const N: usize> AsRef<[u16]> for RegU16Array<N> {
-    fn as_ref(&self) -> &[u16] {
-        &self.data
-    }
-}
-
 impl<const N: usize> Index<usize> for RegU16Array<N> {
     type Output = u16;
     fn index(&self, index: usize) -> &Self::Output {
@@ -118,44 +111,6 @@ impl<const N: usize> Index<usize> for RegU16Array<N> {
 impl<const N: usize> IndexMut<usize> for RegU16Array<N> {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.data[index]
-    }
-}
-
-impl<const N: usize> IntoIterator for RegU16Array<N> {
-    type Item = u16;
-    type IntoIter = core::array::IntoIter<u16, N>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.data.into_iter()
-    }
-}
-
-impl<'a, const N: usize> IntoIterator for &'a RegU16Array<N> {
-    type Item = &'a u16;
-    type IntoIter = core::slice::Iter<'a, u16>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.data.iter()
-    }
-}
-
-impl<'a, const N: usize> IntoIterator for &'a mut RegU16Array<N> {
-    type Item = &'a mut u16;
-    type IntoIter = core::slice::IterMut<'a, u16>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.data.iter_mut()
-    }
-}
-
-impl<'a, const N: usize> IntoRegIter<'a> for &'a RegU16Array<N> {
-    type IntoIter = <&'a RegU16Array<N> as IntoIterator>::IntoIter;
-    fn into_reg_iter(self) -> Self::IntoIter {
-        self.into_iter()
-    }
-}
-
-impl<'a, const N: usize> IntoRegIterMut<'a> for &'a mut RegU16Array<N> {
-    type IntoIter = <&'a mut RegU16Array<N> as IntoIterator>::IntoIter;
-    fn into_reg_iter_mut(self) -> Self::IntoIter {
-        self.into_iter()
     }
 }
 
@@ -191,8 +146,10 @@ mod reg_u16_array_tests {
     use super::*;
 
     #[test]
-    fn as_ref_001() {
+    fn read_001() {
         let reg = RegU16Array::new([0x1234, 0x5678]);
-        assert_eq!(reg.as_ref(), &[0x1234, 0x5678]);
+        let mut buf = [0u16; 2];
+        assert_eq!(reg.read(0, &mut buf), Ok(()));
+        assert_eq!(buf, [0x1234, 0x5678]);
     }
 }

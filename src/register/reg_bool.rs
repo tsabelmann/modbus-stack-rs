@@ -2,7 +2,6 @@ use super::{
     ReadRegisterData, RegisterData, RegisterResult, WriteRegisterData, read_words, write_words_with,
 };
 use crate::Registers;
-use crate::register::{IntoRegIter, IntoRegIterMut};
 
 /// Modbus register that can be converter to and from [bool].
 #[derive(Debug, PartialEq, Default, Clone)]
@@ -54,44 +53,6 @@ impl From<&RegBool> for bool {
     }
 }
 
-impl IntoIterator for RegBool {
-    type Item = u16;
-    type IntoIter = core::array::IntoIter<u16, 1>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.data.into_iter()
-    }
-}
-
-impl<'a> IntoIterator for &'a RegBool {
-    type Item = &'a u16;
-    type IntoIter = core::slice::Iter<'a, u16>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.data.iter()
-    }
-}
-
-impl<'a> IntoIterator for &'a mut RegBool {
-    type Item = &'a mut u16;
-    type IntoIter = core::slice::IterMut<'a, u16>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.data.iter_mut()
-    }
-}
-
-impl<'a> IntoRegIter<'a> for &'a RegBool {
-    type IntoIter = <&'a RegBool as IntoIterator>::IntoIter;
-    fn into_reg_iter(self) -> Self::IntoIter {
-        self.into_iter()
-    }
-}
-
-impl<'a> IntoRegIterMut<'a> for &'a mut RegBool {
-    type IntoIter = <&'a mut RegBool as IntoIterator>::IntoIter;
-    fn into_reg_iter_mut(self) -> Self::IntoIter {
-        self.into_iter()
-    }
-}
-
 /* RegisterData */
 
 impl RegisterData for RegBool {
@@ -122,83 +83,29 @@ impl WriteRegisterData for RegBool {
 #[cfg(test)]
 mod reg_bool_tests {
     use super::*;
-    use crate::register::{IntoRegIter, IntoRegIterMut};
 
     #[test]
-    fn reg_iter_001() {
-        let reg0 = RegBool::new(false);
-        let reg1 = RegBool::new(true);
-        let reg2 = RegBool::new(false);
-        let reg3 = RegBool::new(true);
-
-        let iter0 = reg0.into_reg_iter();
-        let iter1 = reg1.into_reg_iter();
-        let iter2 = reg2.into_reg_iter();
-        let iter3 = reg3.into_reg_iter();
-
-        let mut iter = iter0.chain(iter1).chain(iter2).chain(iter3);
-        assert_eq!(Some(&0x0000), iter.next());
-        assert_eq!(Some(&0xFFFF), iter.next());
-        assert_eq!(Some(&0x0000), iter.next());
-        assert_eq!(Some(&0xFFFF), iter.next());
-        assert_eq!(None, iter.next());
+    fn read_001() {
+        let regs = [RegBool::new(false), RegBool::new(true)];
+        let expected = [[0x0000], [0xFFFF]];
+        for (reg, expected) in regs.iter().zip(expected) {
+            let mut buf = [0u16; 1];
+            assert_eq!(reg.read(0, &mut buf), Ok(()));
+            assert_eq!(buf, expected);
+        }
     }
 
     #[test]
-    fn reg_iter_mut_001() {
-        let mut reg0 = RegBool::new(false);
-        let mut reg1 = RegBool::new(true);
-        let mut reg2 = RegBool::new(true);
-        let mut reg3 = RegBool::new(false);
-
-        let iter0 = reg0.into_reg_iter();
-        let iter1 = reg1.into_reg_iter();
-        let iter2 = reg2.into_reg_iter();
-        let iter3 = reg3.into_reg_iter();
-
-        // check values equal initialization
-        let mut iter = iter0.chain(iter1).chain(iter2).chain(iter3);
-        assert_eq!(Some(&0x0000), iter.next());
-        assert_eq!(Some(&0xFFFF), iter.next());
-        assert_eq!(Some(&0xFFFF), iter.next());
-        assert_eq!(Some(&0x0000), iter.next());
-        assert_eq!(None, iter.next());
-
-        // Change values
-        let iter0 = reg0.into_reg_iter_mut();
-        let iter1 = reg1.into_reg_iter_mut();
-        let iter2 = reg2.into_reg_iter_mut();
-        let iter3 = reg3.into_reg_iter_mut();
-
-        let mut iter = iter0.chain(iter1).chain(iter2).chain(iter3);
-        if let Some(reff) = iter.next() {
-            *reff = 42;
+    fn write_001() {
+        let cases = [
+            ([0xFFFF], true),
+            ([0x0000], false),
+        ];
+        for (words, expected) in cases {
+            let mut reg = RegBool::new(false);
+            assert_eq!(reg.write(0, Registers::from(&words[..])), Ok(()));
+            assert_eq!(bool::from(&reg), expected);
         }
-
-        if let Some(reff) = iter.next() {
-            *reff = 1337;
-        }
-
-        if let Some(reff) = iter.next() {
-            *reff = 65525;
-        }
-
-        if let Some(reff) = iter.next() {
-            *reff = 1;
-        }
-
-        // check for change
-        let iter0 = reg0.into_reg_iter();
-        let iter1 = reg1.into_reg_iter();
-        let iter2 = reg2.into_reg_iter();
-        let iter3 = reg3.into_reg_iter();
-
-        let mut iter = iter0.chain(iter1).chain(iter2).chain(iter3);
-        assert_eq!(Some(&42), iter.next());
-        assert_eq!(Some(&1337), iter.next());
-        assert_eq!(Some(&65525), iter.next());
-        assert_eq!(Some(&1), iter.next());
-        assert_eq!(None, iter.next());
     }
 
     #[test]
