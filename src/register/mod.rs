@@ -61,6 +61,10 @@ pub use cursor::{ReadCursor, WriteCursor};
 mod reserved;
 pub use reserved::Reserved;
 
+// Primitive types
+
+mod primitive;
+
 /// Mögliche Fehler bei Register-Operationen
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
