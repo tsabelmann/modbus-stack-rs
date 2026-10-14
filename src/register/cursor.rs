@@ -55,7 +55,13 @@ impl<'a> ReadCursor<'a> {
     }
 
     /// Reads the part of the request that falls into `reg`, then advances past `reg`.
-    pub fn visit(&mut self, reg: &dyn ReadRegisterData) -> RegisterResult<()> {
+    #[inline]
+    pub fn visit<R: ReadRegisterData + ?Sized>(&mut self, reg: &R) -> RegisterResult<()> {
+        // request already completed
+        if self.offset == 0 && self.buf.is_empty() {
+            return Ok(());
+        }
+
         let span = reg.register_span();
 
         // `reg` lies completely before the requested range
@@ -79,6 +85,7 @@ impl<'a> ReadCursor<'a> {
     }
 
     /// Fails with [RegisterError::OutOfBounds] if the requested range reaches beyond the last visited register.
+    #[inline]
     pub fn finish(self) -> RegisterResult<()> {
         if self.offset == 0 && self.buf.is_empty() {
             Ok(())
@@ -114,7 +121,13 @@ impl<'a> WriteCursor<'a> {
     }
 
     /// Writes the part of the request that falls into `reg`, then advances past `reg`.
-    pub fn visit(&mut self, reg: &mut dyn WriteRegisterData) -> RegisterResult<()> {
+    #[inline]
+    pub fn visit<R: WriteRegisterData + ?Sized>(&mut self, reg: &mut R) -> RegisterResult<()> {
+        // request already completed
+        if self.offset == 0 && self.values.len() == 0 {
+            return Ok(());
+        }
+
         let span = reg.register_span();
 
         // `reg` lies completely before the requested range
@@ -138,6 +151,7 @@ impl<'a> WriteCursor<'a> {
     }
 
     /// Fails with [RegisterError::OutOfBounds] if the requested range reaches beyond the last visited register.
+    #[inline]
     pub fn finish(self) -> RegisterResult<()> {
         if self.offset == 0 && self.values.len() == 0 {
             Ok(())
