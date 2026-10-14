@@ -111,13 +111,6 @@ pub trait WriteRegisterData: RegisterData {
     fn write(&mut self, offset: usize, values: Registers<'_>) -> RegisterResult<()>;
 }
 
-impl RegisterData for &[u16] {
-    #[inline]
-    fn register_span(&self) -> usize {
-        self.len()
-    }
-}
-
 /// Copies `buf.len()` registers starting at `offset` from `data` into `buf`.
 #[inline]
 pub fn read_words(data: &[u16], offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
@@ -180,31 +173,64 @@ pub fn write_whole(data: &mut [u16], offset: usize, values: Registers<'_>) -> Re
     write_words(data, offset, values)
 }
 
-impl ReadRegisterData for &[u16] {
-    #[inline]
-    fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
-        read_words(self, offset, buf)
-    }
-}
+/* Slices */
 
-impl RegisterData for &mut [u16] {
+impl RegisterData for [u16] {
     #[inline]
     fn register_span(&self) -> usize {
         self.len()
     }
 }
 
-impl ReadRegisterData for &mut [u16] {
+impl ReadRegisterData for [u16] {
     #[inline]
     fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
         read_words(self, offset, buf)
     }
 }
 
-impl WriteRegisterData for &mut [u16] {
+impl WriteRegisterData for [u16] {
     #[inline]
     fn write(&mut self, offset: usize, values: Registers<'_>) -> RegisterResult<()> {
         write_words(self, offset, values)
+    }
+}
+
+/* References */
+
+impl<T: RegisterData + ?Sized> RegisterData for &T {
+    #[inline]
+    fn register_span(&self) -> usize {
+        (**self).register_span()
+    }
+}
+
+impl<T: ReadRegisterData + ?Sized> ReadRegisterData for &T {
+    #[inline]
+    fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
+        (**self).read(offset, buf)
+    }
+}
+
+impl<T: RegisterData + ?Sized> RegisterData for &mut T {
+    #[inline]
+    fn register_span(&self) -> usize {
+        (**self).register_span()
+    }
+}
+
+impl<T: ReadRegisterData + ?Sized> ReadRegisterData for &mut T {
+    #[inline]
+    fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
+        (**self).read(offset, buf)
+    }
+}
+
+/// Writing through a shared reference is not possible, so `&T` only implements reading.
+impl<T: WriteRegisterData + ?Sized> WriteRegisterData for &mut T {
+    #[inline]
+    fn write(&mut self, offset: usize, values: Registers<'_>) -> RegisterResult<()> {
+        (**self).write(offset, values)
     }
 }
 
@@ -536,7 +562,7 @@ mod register_tests {
     #[test]
     fn write_slice_001() {
         let mut data = [1u16, 2, 3, 4];
-        let mut slice: &mut [u16] = &mut data;
+        let slice: &mut [u16] = &mut data;
 
         assert_eq!(slice.write(1, Registers::from(&[20, 30][..])), Ok(()));
         assert_eq!(slice, [1, 20, 30, 4]);
@@ -634,5 +660,97 @@ mod register_tests {
             reg.write(1, Registers::from(&[0][..])),
             Err(RegisterError::OutOfBounds { offset: 1 })
         );
+    }
+
+    #[test]
+    fn reference_001() {
+        let value = 0x1122_3344u32;
+        let mut reg = RO::new(&value);
+
+        let mut buf = [0u16; 2];
+        assert_eq!(reg.read(0, &mut buf), Ok(()));
+        assert_eq!(buf, [0x1122, 0x3344]);
+        assert_eq!(
+            reg.write(0, Registers::from(&[0, 0][..])),
+            Err(RegisterError::AccessDenied)
+        );
+        assert_eq!(value, 0x1122_3344);
+    }
+
+    #[test]
+    fn reference_002() {
+        let mut value = 0u16;
+        let mut reg = RW::new(&mut value);
+        assert_eq!(reg.write(0, Registers::from(&[0xABCD][..])), Ok(()));
+        assert_eq!(value, 0xABCD);
+
+        let mut value = 0f32;
+        let mut reg = RW::new(&mut value);
+        assert_eq!(reg.write(0, Registers::from(&[0x4228, 0x0000][..])), Ok(()));
+        assert_eq!(value, 42.0);
+
+        let mut value = 5i16;
+        let mut reg = At::new(100, RW::new(&mut value));
+        let mut buf = [0u16; 1];
+        assert_eq!(reg.read(100, &mut buf), Ok(()));
+        assert_eq!(buf, [0x0005]);
+        assert_eq!(reg.write(100, Registers::from(&[0xFFFF][..])), Ok(()));
+        assert_eq!(value, -1);
+    }
+
+    #[test]
+    fn reference_003() {
+        struct State {
+            status: u16,
+            setpoint: u32,
+        }
+
+        struct View<'a> {
+            status: RO<&'a u16>,
+            setpoint: RW<&'a mut u32>,
+        }
+
+        impl RegisterData for View<'_> {
+            fn register_span(&self) -> usize {
+                self.status.register_span() + self.setpoint.register_span()
+            }
+        }
+
+        impl ReadRegisterData for View<'_> {
+            fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
+                let mut cursor = ReadCursor::new(offset, buf);
+                cursor.visit(&self.status)?;
+                cursor.visit(&self.setpoint)?;
+                cursor.finish()
+            }
+        }
+
+        impl WriteRegisterData for View<'_> {
+            fn write(&mut self, offset: usize, values: Registers<'_>) -> RegisterResult<()> {
+                let mut cursor = WriteCursor::new(offset, values);
+                cursor.visit(&mut self.status)?;
+                cursor.visit(&mut self.setpoint)?;
+                cursor.finish()
+            }
+        }
+
+        let mut state = State { status: 7, setpoint: 0 };
+        let mut view = View {
+            status: RO::new(&state.status),
+            setpoint: RW::new(&mut state.setpoint),
+        };
+
+        assert_eq!(view.write(1, Registers::from(&[0x0001, 0x0002][..])), Ok(()));
+        assert_eq!(
+            view.write(0, Registers::from(&[0][..])),
+            Err(RegisterError::AccessDenied)
+        );
+
+        let mut buf = [0u16; 3];
+        assert_eq!(view.read(0, &mut buf), Ok(()));
+        assert_eq!(buf, [7, 0x0001, 0x0002]);
+
+        assert_eq!(state.status, 7);
+        assert_eq!(state.setpoint, 0x0001_0002);
     }
 }
