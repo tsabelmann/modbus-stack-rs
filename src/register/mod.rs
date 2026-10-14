@@ -120,12 +120,14 @@ pub trait WriteRegisterData: RegisterData {
 }
 
 impl RegisterData for &[u16] {
+    #[inline]
     fn register_span(&self) -> usize {
         self.len()
     }
 }
 
 /// Copies `buf.len()` registers starting at `offset` from `data` into `buf`.
+#[inline]
 pub fn read_words(data: &[u16], offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
     let src = offset
         .checked_add(buf.len())
@@ -136,6 +138,7 @@ pub fn read_words(data: &[u16], offset: usize, buf: &mut [u16]) -> RegisterResul
 }
 
 /// Like [read_words], but only the whole `data` can be read at once.
+#[inline]
 pub fn read_whole(data: &[u16], offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
     if offset >= data.len() || buf.len() > data.len() - offset {
         return Err(RegisterError::OutOfBounds { offset });
@@ -147,11 +150,13 @@ pub fn read_whole(data: &[u16], offset: usize, buf: &mut [u16]) -> RegisterResul
 }
 
 /// Copies all `values` into `data` starting at `offset`.
+#[inline]
 pub fn write_words(data: &mut [u16], offset: usize, values: Registers<'_>) -> RegisterResult<()> {
     write_words_with(data, offset, values, |_| true)
 }
 
 /// Like [write_words], but fails with [RegisterError::InvalidValue] if any value is not valid.
+#[inline]
 pub fn write_words_with(
     data: &mut [u16],
     offset: usize,
@@ -172,6 +177,7 @@ pub fn write_words_with(
 }
 
 /// Like [write_words], but only the whole `data` can be written at once.
+#[inline]
 pub fn write_whole(data: &mut [u16], offset: usize, values: Registers<'_>) -> RegisterResult<()> {
     if offset >= data.len() || values.len() > data.len() - offset {
         return Err(RegisterError::OutOfBounds { offset });
@@ -183,24 +189,28 @@ pub fn write_whole(data: &mut [u16], offset: usize, values: Registers<'_>) -> Re
 }
 
 impl ReadRegisterData for &[u16] {
+    #[inline]
     fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
         read_words(self, offset, buf)
     }
 }
 
 impl RegisterData for &mut [u16] {
+    #[inline]
     fn register_span(&self) -> usize {
         self.len()
     }
 }
 
 impl ReadRegisterData for &mut [u16] {
+    #[inline]
     fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
         read_words(self, offset, buf)
     }
 }
 
 impl WriteRegisterData for &mut [u16] {
+    #[inline]
     fn write(&mut self, offset: usize, values: Registers<'_>) -> RegisterResult<()> {
         write_words(self, offset, values)
     }

@@ -35,6 +35,7 @@ impl Reserved {
     }
 
     /// Fails with [RegisterError::OutOfBounds] unless `[offset, offset + len)` lies within the span.
+    #[inline]
     fn check(&self, offset: usize, len: usize) -> RegisterResult<()> {
         match offset.checked_add(len) {
             Some(end) if end <= self.span => Ok(()),
@@ -44,12 +45,14 @@ impl Reserved {
 }
 
 impl RegisterData for Reserved {
+    #[inline]
     fn register_span(&self) -> usize {
         self.span
     }
 }
 
 impl ReadRegisterData for Reserved {
+    #[inline]
     fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
         self.check(offset, buf.len())?;
         buf.fill(self.value);
@@ -58,6 +61,7 @@ impl ReadRegisterData for Reserved {
 }
 
 impl WriteRegisterData for Reserved {
+    #[inline]
     fn write(&mut self, offset: usize, values: Registers<'_>) -> RegisterResult<()> {
         self.check(offset, values.len())?;
         Err(RegisterError::AccessDenied)

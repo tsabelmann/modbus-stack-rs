@@ -101,6 +101,7 @@ impl<'a> IntoRegIterMut<'a> for &'a mut RegF32 {
 /* RegisterData */
 
 impl RegisterData for RegF32 {
+    #[inline]
     fn register_span(&self) -> usize {
         2
     }
@@ -109,6 +110,7 @@ impl RegisterData for RegF32 {
 /* ReadRegisterData */
 
 impl ReadRegisterData for RegF32 {
+    #[inline]
     fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
         read_whole(&self.data, offset, buf)
     }
@@ -117,6 +119,7 @@ impl ReadRegisterData for RegF32 {
 /* WriteRegisterData */
 
 impl WriteRegisterData for RegF32 {
+    #[inline]
     fn write(&mut self, offset: usize, values: Registers<'_>) -> RegisterResult<()> {
         write_whole(&mut self.data, offset, values)
     }

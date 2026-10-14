@@ -1,22 +1,24 @@
 use super::{IntoRegIter, IntoRegIterMut};
-use core::{ops::{Index, IndexMut}};
-use super::{RegisterData, ReadRegisterData, WriteRegisterData, RegisterResult, read_words, write_words};
+use super::{
+    ReadRegisterData, RegisterData, RegisterResult, WriteRegisterData, read_words, write_words,
+};
 use crate::Registers;
+use core::ops::{Index, IndexMut};
 
 /// Modbus register that can be converter to and from [u16; N].
 #[derive(Debug, PartialEq, Clone)]
 pub struct RegU16Array<const N: usize> {
-    data: [u16; N]
+    data: [u16; N],
 }
 
 impl<const N: usize> RegU16Array<N> {
     /// Creates a new [[u16; N]] based modbus register.
-    /// 
+    ///
     /// # Example
     ///
     /// ```
     /// use modbus_stack::register::RegF32;
-    /// 
+    ///
     /// let reg = RegF32::new(42.0);
     /// ````
     pub const fn new(value: [u16; N]) -> RegU16Array<N> {
@@ -35,7 +37,7 @@ impl<const N: usize> RegU16Array<N> {
             let hbyte = if slice_idx < slice_len {
                 // save current slice index
                 let i = slice_idx;
-                
+
                 // increment slice index
                 slice_idx += 1;
 
@@ -49,7 +51,7 @@ impl<const N: usize> RegU16Array<N> {
             let lbyte = if slice_idx < slice_len {
                 // save current slice index
                 let i = slice_idx;
-                
+
                 // increment slice index
                 slice_idx += 1;
 
@@ -68,7 +70,6 @@ impl<const N: usize> RegU16Array<N> {
 
         RegU16Array { data }
     }
-
 }
 
 impl<const N: usize> Default for RegU16Array<N> {
@@ -144,14 +145,14 @@ impl<'a, const N: usize> IntoIterator for &'a mut RegU16Array<N> {
     }
 }
 
-impl<'a, const N: usize> IntoRegIter<'a> for &'a RegU16Array<N>  {
+impl<'a, const N: usize> IntoRegIter<'a> for &'a RegU16Array<N> {
     type IntoIter = <&'a RegU16Array<N> as IntoIterator>::IntoIter;
     fn into_reg_iter(self) -> Self::IntoIter {
         self.into_iter()
     }
 }
 
-impl<'a, const N: usize> IntoRegIterMut<'a> for &'a mut RegU16Array<N>  {
+impl<'a, const N: usize> IntoRegIterMut<'a> for &'a mut RegU16Array<N> {
     type IntoIter = <&'a mut RegU16Array<N> as IntoIterator>::IntoIter;
     fn into_reg_iter_mut(self) -> Self::IntoIter {
         self.into_iter()
@@ -161,6 +162,7 @@ impl<'a, const N: usize> IntoRegIterMut<'a> for &'a mut RegU16Array<N>  {
 /* RegisterData */
 
 impl<const N: usize> RegisterData for RegU16Array<N> {
+    #[inline]
     fn register_span(&self) -> usize {
         N
     }
@@ -169,6 +171,7 @@ impl<const N: usize> RegisterData for RegU16Array<N> {
 /* ReadRegisterData */
 
 impl<const N: usize> ReadRegisterData for RegU16Array<N> {
+    #[inline]
     fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
         read_words(&self.data, offset, buf)
     }
@@ -177,6 +180,7 @@ impl<const N: usize> ReadRegisterData for RegU16Array<N> {
 /* WriteRegisterData */
 
 impl<const N: usize> WriteRegisterData for RegU16Array<N> {
+    #[inline]
     fn write(&mut self, offset: usize, values: Registers<'_>) -> RegisterResult<()> {
         write_words(&mut self.data, offset, values)
     }

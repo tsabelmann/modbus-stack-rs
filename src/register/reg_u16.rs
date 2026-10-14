@@ -104,6 +104,7 @@ impl<'a> IntoRegIterMut<'a> for &'a mut RegU16 {
 /* RegisterData */
 
 impl RegisterData for RegU16 {
+    #[inline]
     fn register_span(&self) -> usize {
         1
     }
@@ -112,6 +113,7 @@ impl RegisterData for RegU16 {
 /* ReadRegisterData */
 
 impl ReadRegisterData for RegU16 {
+    #[inline]
     fn read(&self, offset: usize, buf: &mut [u16]) -> RegisterResult<()> {
         read_words(&self.data, offset, buf)
     }
@@ -120,6 +122,7 @@ impl ReadRegisterData for RegU16 {
 /* WriteRegisterData */
 
 impl WriteRegisterData for RegU16 {
+    #[inline]
     fn write(&mut self, offset: usize, values: Registers<'_>) -> RegisterResult<()> {
         write_words(&mut self.data, offset, values)
     }
